@@ -2,6 +2,7 @@ from telebot import types
 import telebot
 import time
 import re
+from PIL import Image
 import threading
 
 token = "1427693199:AAGnuGWcgwUy5tLlE7_GKyomLCHKY_T5mZI"
@@ -19,6 +20,9 @@ class UserInBot:
         self.__can_change_links = False
         self.__can_change_names = False
         self.__can_del_button = False
+        self.__can_change_welcome_text = False
+        self.__can_change_photo = False
+        self.__can_change_button_time = False
         self.__can_change_time_banned = False
         self.__can_change_group_banned = False
         self.__can_change_friend_banned = False
@@ -66,14 +70,32 @@ class UserInBot:
     def get_can_change_names(self):
         return self.__can_change_names
 
+    def set_can_change_photo(self, can_change_photo):
+        self.__can_change_photo = can_change_photo
+
+    def get_can_change_photo(self):
+        return self.__can_change_photo
+
     def set_can_change_names(self, can_change_names):
         self.__can_change_names = can_change_names
+
+    def get_can_change_welcome_text(self):
+        return self.__can_change_welcome_text
+
+    def set_can_change_welcome_text(self, can_change_welcome_text):
+        self.__can_change_welcome_text = can_change_welcome_text
 
     def get_can_del_button(self):
         return self.__can_del_button
 
     def set_can_del_button(self, can_del_button):
         self.__can_del_button = can_del_button
+
+    def get_can_change_button_time(self):
+        return self.__can_change_button_time
+
+    def set_can_change_button_time(self, can_change_button_time):
+        self.__can_change_button_time = can_change_button_time
 
     def get_number_chat(self):
         return self.__number_chat
@@ -156,8 +178,12 @@ class Chat:
         self.__links = True
         self.__forward = True
         self.__welcome = False
+        self.__welcome_text = "Добро пожаловать"
+        self.__welcome_photo = False
+        self.__welcome_gif = False
         self.__buttons_new = False
-        self.__buttons_time = False
+        self.__buttons_time = 0
+        self.__when_posted_button = 0
         self.__banned_time = 0
         self.__banned_chanel = 0
         self.__banned_chanel_name = ""
@@ -166,6 +192,8 @@ class Chat:
         self.__banned_friend = 0
         self.__banned_friend_one = 0
         self.__banned_friend_every = 0
+        self.__previous_message = 0
+        self.__previous_message_by_time = 0
         self.__users_in_chat = []
         self.__new_users_in_chat = []
 
@@ -208,14 +236,32 @@ class Chat:
     def get_buttons_time(self):
         return self.__buttons_time
 
-    def change_buttons_time(self):
-        self.__buttons_time = not self.__buttons_time
+    def set_buttons_time(self, buttons_time):
+        self.__buttons_time = buttons_time
+
+    def get_welcome_photo(self):
+        return self.__welcome_photo
+
+    def set_welcome_photo(self, welcome_photo):
+        self.__welcome_photo = welcome_photo
+
+    def get_welcome_gif(self):
+        return self.__welcome_gif
+
+    def set_welcome_gif(self, welcome_gif):
+        self.__welcome_gif = welcome_gif
 
     def get_users_in_chat(self):
         return self.__users_in_chat
 
     def set_users_in_chat(self, users_in_chat):
         self.__users_in_chat = users_in_chat
+
+    def get_welcome_text(self):
+        return self.__welcome_text
+
+    def set_welcome_text(self, welcome_text):
+        self.__welcome_text = welcome_text
 
     def add_user_in_chat(self, user_id):
         self.__users_in_chat.append(UserInChat(user_id))
@@ -243,6 +289,12 @@ class Chat:
 
     def add_button_names(self, name):
         self.__button_names.append(name)
+
+    def set_when_posted_button(self, when_posted_button):
+        self.__when_posted_button = when_posted_button
+
+    def get_when_posted_button(self):
+        return self.__when_posted_button
 
     def add_new_user_in_chat(self, user_id):
         self.__new_users_in_chat.append(user_id)
@@ -297,6 +349,18 @@ class Chat:
 
     def set_banned_friend(self, banned_friend):
         self.__banned_friend = banned_friend
+
+    def get_previous_message(self):
+        return self.__previous_message
+
+    def set_previous_message(self, previous_message):
+        self.__previous_message = previous_message
+
+    def get_previous_message_by_time(self):
+        return self.__previous_message_by_time
+
+    def set_previous_message_by_time(self, previous_message_by_time):
+        self.__previous_message_by_time = previous_message_by_time
 
 
 def is_user(user_id):
@@ -372,8 +436,6 @@ def settings_buttons(chat_numb):
         welcome_txt = "(включено)"
     else:
         welcome_txt = "(выключено)"
-
-
 
     key = types.InlineKeyboardMarkup()
     but_1 = types.InlineKeyboardButton(text="Запрещённые слова", callback_data="banned_words")
@@ -707,11 +769,82 @@ def welcome(call):
     except Exception as e:
         pass
     number = get_user(call.from_user.id)
-    users[number].set_can_change_friend_banned(True)
+    users[number].set_can_del_button(False)
     chat_numb = chat_number(call.from_user.id)
-    chats[chat_numb].set_banned_friend_one(0)
-    chats[chat_numb].set_banned_friend_every(1)
-    bot.send_message(call.from_user.id, "Введите количество человек, сколько нужно пригласить.")
+    if chats[chat_numb].get_welcome():
+        new_txt = "(включено)"
+    else:
+        new_txt = "(выключено)"
+
+    key = types.InlineKeyboardMarkup()
+    but_1 = types.InlineKeyboardButton(text="Изменить текст приветствия", callback_data="text_welcome")
+    but_2 = types.InlineKeyboardButton(text="Приветствовать новых игроков" + new_txt,
+                                       callback_data="turn_on_welcome_new")
+    but_4 = types.InlineKeyboardButton(text="Показать приветствие", callback_data="show_text_welcome")
+    but_5 = types.InlineKeyboardButton(text="Добавить фото", callback_data="add_photo")
+    but_6 = types.InlineKeyboardButton(text="Добавить гиф", callback_data="add_gif")
+    but_7 = types.InlineKeyboardButton(text="Назад", callback_data="chat_settings")
+    key.add(but_1)
+    key.add(but_2)
+    key.add(but_4)
+    key.add(but_5)
+    key.add(but_6)
+    key.add(but_7)
+    bot.send_message(call.from_user.id, "Выберите действие", reply_markup=key, parse_mode='Markdown')
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "turn_on_welcome_new")
+def turn_on_welcome_new(call):
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        pass
+    chat_numb = chat_number(call.from_user.id)
+    chats[chat_numb].change_welcome()
+    welcome(call)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "text_welcome")
+def text_welcome(call):
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        pass
+    number = get_user(call.from_user.id)
+    users[number].set_can_change_welcome_text(True)
+
+    bot.send_message(call.from_user.id, "Введите текст приветствия")
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "show_text_welcome")
+def show_text_welcome(call):
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        pass
+    chat_numb = chat_number(call.from_user.id)
+    text = chats[chat_numb].get_welcome_text()
+    keyboard = types.InlineKeyboardMarkup()
+
+    keyboard.add(types.InlineKeyboardButton(text="Назад", callback_data="welcome"))
+    if chats[chat_numb].get_welcome_photo():
+        photo = open(str(chats[chat_numb].get_chat_id()), 'rb')
+        bot.send_photo(call.from_user.id, photo, text, reply_markup=keyboard)
+
+    else:
+        bot.send_message(call.from_user.id, text, reply_markup=keyboard)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "add_photo")
+def add_photo(call):
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        pass
+    number = get_user(call.from_user.id)
+    users[number].set_can_change_photo(True)
+
+    bot.send_message(call.from_user.id, "Пришлите фото")
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "buttons")
@@ -728,8 +861,8 @@ def buttons(call):
     else:
         buttons_new_txt = "(выключено)"
 
-    if chats[chat_numb].get_buttons_time():
-        buttons_time_txt = "(включено)"
+    if chats[chat_numb].get_buttons_time() != 0:
+        buttons_time_txt = f"({chats[chat_numb].get_buttons_time()} минут)"
     else:
         buttons_time_txt = "(выключено)"
 
@@ -827,9 +960,11 @@ def turn_on_buttons_time(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception as e:
         pass
-    chat_numb = chat_number(call.from_user.id)
-    chats[chat_numb].change_buttons_time()
-    buttons(call)
+    number = get_user(call.from_user.id)
+    users[number].set_can_change_button_time(True)
+
+    bot.send_message(call.from_user.id, "Введите время (в минутах) как часто публиковать кнопки."
+                                        "\n0 для отмены публикаций")
 
 
 @bot.message_handler(content_types=["new_chat_members"])
@@ -881,7 +1016,20 @@ def new_member(message):
                         us.set_is_group_banned(True)
 
         text = f"Добро пожаловать, {name}"
-        bot.send_message(message.chat.id, text)
+        if chats[chat_numb].get_buttons_new():
+            links = chats[chat_numb].get_button_links()
+            names = chats[chat_numb].get_button_names()
+            keyboard = types.InlineKeyboardMarkup()
+            for i in range(len(names)):
+                keyboard.add(types.InlineKeyboardButton(text=names[i], url=links[i]))
+
+            try:
+                bot.delete_message(message.chat.id, chats[chat_numb].get_previous_message())
+            except Exception as e:
+                print(e)
+            mes = bot.send_message(message.chat.id, text, reply_markup=keyboard)
+            chats[chat_numb].set_previous_message(mes.message_id)
+
         bot.delete_message(message.chat.id, message.message_id)
     except Exception as e:
         print(e)
@@ -900,6 +1048,24 @@ def check_banned():
     while True:
         if time.time() - old_time > 1:
             for chat in chats:
+                if time.time() - chat.get_when_posted_button() > chat.get_buttons_time() * 60 and chat.get_buttons_time() != 0:
+
+                    text = f"Кнопки:"
+                    links = chat.get_button_links()
+                    names = chat.get_button_names()
+                    keyboard = types.InlineKeyboardMarkup()
+                    for i in range(len(names)):
+                        keyboard.add(types.InlineKeyboardButton(text=names[i], url=links[i]))
+                    chat.set_when_posted_button(time.time())
+                    try:
+                        bot.delete_message(chat.get_chat_id(), chat.get_previous_message_by_time())
+                    except Exception:
+                        pass
+
+                    if keyboard.keyboard:
+                        mes = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard)
+                        chat.set_previous_message_by_time(mes.message_id)
+
                 users_in_chat = chat.get_users_in_chat()
                 for us in users_in_chat:
                     if time.time() - us.get_when_banned() > us.get_time_of_ban() * 60 and us.get_is_time_banned():
@@ -941,6 +1107,28 @@ def check_banned():
                         pass
 
             old_time = time.time()
+
+
+@bot.message_handler(content_types=['photo'])
+def photo_handler(message):
+    if message.chat.id > 0:
+        is_any = False
+        chat_numb = chat_number(message.chat.id)
+
+        for us in users:
+            if us.get_user_id() == message.chat.id and us.get_can_change_photo():
+                is_any = True
+                us.set_can_change_photo(False)
+                chats[chat_numb].set_welcome_photo(True)
+                chats[chat_numb].set_welcome_gif(False)
+                fileID = message.photo[-1].file_id
+                file_info = bot.get_file(fileID)
+                downloaded_file = bot.download_file(file_info.file_path)
+                with open(str(chats[chat_numb].get_chat_id()), 'wb') as new_file:
+                    new_file.write(downloaded_file)
+                welcome(message)
+        if not is_any:
+            bot.send_message(message.chat.id, "Извините, я не понял.")
 
 
 @bot.message_handler()
@@ -1046,9 +1234,27 @@ def message_handler(message):
                         bot.send_message(message.chat.id, "Такой кнопки нет.")
                 else:
                     bot.send_message(message.chat.id, "Некорректный ввод.")
+            elif us.get_user_id() == message.chat.id and us.get_can_change_button_time():
+
+                is_any = True
+                if message.text.isdigit():
+                    if 0 <= int(message.text) <= 10080:
+                        chats[chat_numb].set_buttons_time(int(message.text))
+                        us.set_can_change_button_time(False)
+                        buttons(message)
+                    else:
+                        bot.send_message(message.chat.id, "Число должно быть в диапазоне 0-10080")
+                else:
+                    bot.send_message(message.chat.id, "Некорректный ввод.")
+            elif us.get_user_id() == message.chat.id and us.get_can_change_welcome_text():
+                is_any = True
+                chats[chat_numb].set_welcome_text(message.text)
+                us.set_can_change_welcome_text(False)
+                welcome(message)
 
         if not is_any:
             bot.send_message(message.chat.id, "Извините, я не понял.")
+
     else:
         try:
             admins = []
@@ -1094,7 +1300,6 @@ if __name__ == "__main__":
 
         except Exception as e:
             print(e)
-            time.sleep(5)
             del bot
             del x
             bot = telebot.TeleBot(token=token)
