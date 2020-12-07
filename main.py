@@ -22,6 +22,7 @@ class UserInBot:
         self.__can_del_button = False
         self.__can_change_welcome_text = False
         self.__can_change_photo = False
+        self.__can_change_gif = False
         self.__can_change_button_time = False
         self.__can_change_time_banned = False
         self.__can_change_group_banned = False
@@ -75,6 +76,12 @@ class UserInBot:
 
     def get_can_change_photo(self):
         return self.__can_change_photo
+
+    def set_can_change_gif(self, can_change_gif):
+        self.__can_change_gif = can_change_gif
+
+    def get_can_change_gif(self):
+        return self.__can_change_gif
 
     def set_can_change_names(self, can_change_names):
         self.__can_change_names = can_change_names
@@ -827,10 +834,9 @@ def show_text_welcome(call):
     keyboard = types.InlineKeyboardMarkup()
 
     keyboard.add(types.InlineKeyboardButton(text="Назад", callback_data="welcome"))
-    if chats[chat_numb].get_welcome_photo():
+    if chats[chat_numb].get_welcome_photo() or chats[chat_numb].get_welcome_gif():
         photo = open(str(chats[chat_numb].get_chat_id()), 'rb')
         bot.send_photo(call.from_user.id, photo, text, reply_markup=keyboard)
-
     else:
         bot.send_message(call.from_user.id, text, reply_markup=keyboard)
 
@@ -845,6 +851,18 @@ def add_photo(call):
     users[number].set_can_change_photo(True)
 
     bot.send_message(call.from_user.id, "Пришлите фото")
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "add_gif")
+def add_gif(call):
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        pass
+    number = get_user(call.from_user.id)
+    users[number].set_can_change_gif(True)
+
+    bot.send_message(call.from_user.id, "Пришлите гиф изображение")
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "buttons")
@@ -1015,7 +1033,11 @@ def new_member(message):
 
                         us.set_is_group_banned(True)
 
-        text = f"Добро пожаловать, {name}"
+        try:
+            bot.delete_message(message.chat.id, chats[chat_numb].get_previous_message())
+        except Exception as e:
+            print(e)
+        text = name + ". "+chats[chat_numb].get_welcome_text()
         if chats[chat_numb].get_buttons_new():
             links = chats[chat_numb].get_button_links()
             names = chats[chat_numb].get_button_names()
@@ -1023,11 +1045,20 @@ def new_member(message):
             for i in range(len(names)):
                 keyboard.add(types.InlineKeyboardButton(text=names[i], url=links[i]))
 
-            try:
-                bot.delete_message(message.chat.id, chats[chat_numb].get_previous_message())
-            except Exception as e:
-                print(e)
+        if chats[chat_numb].get_welcome_photo() or chats[chat_numb].get_welcome_gif():
+            photo = open(str(chats[chat_numb].get_chat_id()), 'rb')
+
+        if (chats[chat_numb].get_welcome_photo() or chats[chat_numb].get_welcome_gif()) and not chats[chat_numb].get_buttons_new():
+            mes = bot.send_photo(message.chat.id, photo, text)
+            chats[chat_numb].set_previous_message(mes.message_id)
+        elif chats[chat_numb].get_buttons_new() and not (chats[chat_numb].get_welcome_photo() or chats[chat_numb].get_welcome_gif()):
             mes = bot.send_message(message.chat.id, text, reply_markup=keyboard)
+            chats[chat_numb].set_previous_message(mes.message_id)
+        elif (chats[chat_numb].get_welcome_photo() or chats[chat_numb].get_welcome_gif()) and chats[chat_numb].get_buttons_new():
+            mes = bot.send_photo(message.chat.id, photo, text, reply_markup=keyboard)
+            chats[chat_numb].set_previous_message(mes.message_id)
+        else:
+            mes = bot.send_message(message.chat.id, text)
             chats[chat_numb].set_previous_message(mes.message_id)
 
         bot.delete_message(message.chat.id, message.message_id)
@@ -1050,7 +1081,7 @@ def check_banned():
             for chat in chats:
                 if time.time() - chat.get_when_posted_button() > chat.get_buttons_time() * 60 and chat.get_buttons_time() != 0:
 
-                    text = f"Кнопки:"
+                    text = chat.get_welcome_text()
                     links = chat.get_button_links()
                     names = chat.get_button_names()
                     keyboard = types.InlineKeyboardMarkup()
@@ -1063,8 +1094,14 @@ def check_banned():
                         pass
 
                     if keyboard.keyboard:
-                        mes = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard)
-                        chat.set_previous_message_by_time(mes.message_id)
+                        if chat.get_welcome_photo() or chat.get_welcome_gif():
+                            photo = open(str(chat.get_chat_id()), 'rb')
+                            #bot.send_photo()
+                            mes = bot.send_animation(chat.get_chat_id(), photo, text, reply_markup=keyboard)
+                            chat.set_previous_message_by_time(mes.message_id)
+                        else:
+                            mes = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard)
+                            chat.set_previous_message_by_time(mes.message_id)
 
                 users_in_chat = chat.get_users_in_chat()
                 for us in users_in_chat:
@@ -1113,8 +1150,10 @@ def check_banned():
 def photo_handler(message):
     if message.chat.id > 0:
         is_any = False
-        chat_numb = chat_number(message.chat.id)
-
+        try:
+            chat_numb = chat_number(message.chat.id)
+        except Exception:
+            pass
         for us in users:
             if us.get_user_id() == message.chat.id and us.get_can_change_photo():
                 is_any = True
@@ -1131,164 +1170,195 @@ def photo_handler(message):
             bot.send_message(message.chat.id, "Извините, я не понял.")
 
 
-@bot.message_handler()
-def message_handler(message):
-    if message.chat.id > 0:
-        names = []
-        for chat in chats:
-            if chat.get_owner_id() == message.chat.id:
-                names.append(bot.get_chat(chat.get_chat_id()).title)
-
+@bot.message_handler(content_types=['document'])
+def gif_handler(message):
+    if message.chat.id > 0 and message.document.mime_type == "image/gif":
         is_any = False
-        chat_numb = chat_number(message.chat.id)
-        amount_buttons = len(chats[chat_numb].get_button_names())
+        try:
+            chat_numb = chat_number(message.chat.id)
+        except Exception:
+            pass
         for us in users:
-            if us.get_user_id() == message.chat.id and us.get_can_change():
+            if us.get_user_id() == message.chat.id and us.get_can_change_gif():
                 is_any = True
-                if message.text.isdigit():
-                    if 0 < int(message.text) <= len(names):
-                        us.set_number_chat(int(message.text))
-                        us.set_can_change(False)
-                        chat_settings(message)
-                    else:
-                        bot.send_message(message.chat.id, "Такого номера чата нет.")
-                else:
-                    bot.send_message(message.chat.id, "Некорректный ввод.")
-            elif us.get_user_id() == message.chat.id and us.get_can_change_words():
-                is_any = True
-                words = message.text
-                words = words.split(" ")
-                chats[chat_numb].set_banned_words(words)
-                us.set_can_change_words(False)
-                chat_settings(message)
-            elif us.get_user_id() == message.chat.id and us.get_can_change_time_banned():
-                is_any = True
-                if message.text.isdigit():
-                    if 0 < int(message.text) <= 10080:
-                        chats[chat_numb].set_banned_time(int(message.text))
-                        us.set_can_change_time_banned(False)
-                        banned_user(message)
-                    else:
-                        bot.send_message(message.chat.id, "Число должно быть в диапазоне 0-10080")
-                else:
-                    bot.send_message(message.chat.id, "Некорректный ввод.")
+                us.set_can_change_gif(False)
+                chats[chat_numb].set_welcome_photo(False)
+                chats[chat_numb].set_welcome_gif(True)
 
-            elif us.get_user_id() == message.chat.id and us.get_can_change_group_banned():
-                if message.forward_from_chat:
-                    try:
-                        bot.get_chat_member(message.forward_from_chat.id, us.get_user_id())
-                        chats[chat_numb].set_banned_chanel(message.forward_from_chat.id)
-                        chats[chat_numb].set_banned_chanel_name(message.forward_from_chat.username)
-                        us.set_can_change_group_banned(False)
-                        is_any = True
-                        banned_user(message)
-                    except Exception:
-                        bot.send_message(message.chat.id, "Сперва добавьте бота в канал.")
-                        is_any = True
-            elif us.get_user_id() == message.chat.id and us.get_can_change_friend_banned():
-                is_any = True
-                if message.text.isdigit():
-                    if 0 < int(message.text) <= 30:
-                        chats[chat_numb].set_banned_friend(int(message.text))
-                        us.set_can_change_friend_banned(False)
-                        banned_user(message)
-                    else:
-                        bot.send_message(message.chat.id, "Число должно быть в диапазоне 0-30")
-                else:
-                    bot.send_message(message.chat.id, "Некорректный ввод.")
-
-            elif us.get_user_id() == message.chat.id and us.get_can_change_links():
-                is_any = True
-                text_lst = message.text.split(" ")
-                if re.search(r'\bhttps://\b', message.text) and len(text_lst) == 1:
-                    us.set_can_change_links(False)
-                    us.set_can_change_names(True)
-                    chats[chat_numb].add_button_links(message.text)
-
-                    bot.send_message(message.chat.id, "Теперь напишите название кнопки")
-                else:
-                    bot.send_message(message.chat.id, "Некорректный ввод.")
-
-            elif us.get_user_id() == message.chat.id and us.get_can_change_names():
-                is_any = True
-                us.set_can_change_names(False)
-                chats[chat_numb].add_button_names(message.text)
-                chat_settings(message)
-            elif us.get_user_id() == message.chat.id and us.get_can_del_button():
-                is_any = True
-                if message.text.isdigit():
-                    if 0 < int(message.text) <= amount_buttons:
-                        try:
-                            links_but = chats[chat_numb].get_button_links()
-                            names_but = chats[chat_numb].get_button_names()
-                            links_but.__delitem__(int(message.text) - 1)
-                            names_but.__delitem__(int(message.text) - 1)
-                            chats[chat_numb].set_button_links(links_but)
-                            chats[chat_numb].set_button_names(names_but)
-                        except Exception as e:
-                            print(e)
-
-                        us.set_can_del_button(False)
-                        buttons(message)
-                    else:
-                        bot.send_message(message.chat.id, "Такой кнопки нет.")
-                else:
-                    bot.send_message(message.chat.id, "Некорректный ввод.")
-            elif us.get_user_id() == message.chat.id and us.get_can_change_button_time():
-
-                is_any = True
-                if message.text.isdigit():
-                    if 0 <= int(message.text) <= 10080:
-                        chats[chat_numb].set_buttons_time(int(message.text))
-                        us.set_can_change_button_time(False)
-                        buttons(message)
-                    else:
-                        bot.send_message(message.chat.id, "Число должно быть в диапазоне 0-10080")
-                else:
-                    bot.send_message(message.chat.id, "Некорректный ввод.")
-            elif us.get_user_id() == message.chat.id and us.get_can_change_welcome_text():
-                is_any = True
-                chats[chat_numb].set_welcome_text(message.text)
-                us.set_can_change_welcome_text(False)
+                fileID = message.document.file_id
+                file_info = bot.get_file(fileID)
+                downloaded_file = bot.download_file(file_info.file_path)
+                with open(str(chats[chat_numb].get_chat_id()), 'wb') as new_file:
+                    new_file.write(downloaded_file)
                 welcome(message)
-
         if not is_any:
             bot.send_message(message.chat.id, "Извините, я не понял.")
 
-    else:
-        try:
-            admins = []
-            for admin in bot.get_chat_administrators(message.chat.id):
-                admins.append(admin.user.id)
-                if admin.status == "creator" and not is_chat(message.chat.id):
-                    chats.append(Chat(admin.user.id, message.chat.id))
-            chat_numb = get_chat(message.chat.id)
-            users_in_chat = chats[chat_numb].get_users_in_chat()
-            for us in users_in_chat:
-                if chats[chat_numb].get_banned_friend() != 0 and us.get_user_id() \
-                        and chats[chat_numb].get_banned_friend_every() == 1:
-                    if us.get_friends_count() > 0:
-                        us.set_friends_count(us.get_friends_count() - 1)
 
-            if not chats[chat_numb].is_user_in_chat(message.from_user.id):
-                chats[chat_numb].add_user_in_chat(message.from_user.id)
-            words = chats[chat_numb].get_banned_words()
-            text = message.text.lower()
+@bot.message_handler()
+def message_handler(message):
+    try:
+        if message.chat.id > 0:
+            names = []
+            for chat in chats:
+                if chat.get_owner_id() == message.chat.id:
+                    names.append(bot.get_chat(chat.get_chat_id()).title)
+
+            is_any = False
             try:
-                for word in words:
-                    if re.search(rf'\b{word.lower()}\b', text) and not (message.from_user.id in admins):
-                        bot.delete_message(message.chat.id, message.message_id)
-                        break
-                if not chats[chat_numb].get_links():
-                    if re.search(r'\bhttps://\b', message.text):
-                        bot.delete_message(message.chat.id, message.message_id)
+                chat_numb = chat_number(message.chat.id)
+                amount_buttons = len(chats[chat_numb].get_button_names())
+            except Exception:
+                pass
+            for us in users:
+                if us.get_user_id() == message.chat.id and us.get_can_change():
+                    is_any = True
+                    if message.text.isdigit():
+                        if 0 < int(message.text) <= len(names):
+                            us.set_number_chat(int(message.text))
+                            us.set_can_change(False)
+                            chat_settings(message)
+                        else:
+                            bot.send_message(message.chat.id, "Такого номера чата нет.")
+                    else:
+                        bot.send_message(message.chat.id, "Некорректный ввод.")
+                elif us.get_user_id() == message.chat.id and us.get_can_change_words():
+                    is_any = True
+                    words = message.text
+                    words = words.split(" ")
+                    chats[chat_numb].set_banned_words(words)
+                    us.set_can_change_words(False)
+                    chat_settings(message)
+                elif us.get_user_id() == message.chat.id and us.get_can_change_time_banned():
+                    is_any = True
+                    if message.text.isdigit():
+                        if 0 < int(message.text) <= 10080:
+                            chats[chat_numb].set_banned_time(int(message.text))
+                            us.set_can_change_time_banned(False)
+                            banned_user(message)
+                        else:
+                            bot.send_message(message.chat.id, "Число должно быть в диапазоне 0-10080")
+                    else:
+                        bot.send_message(message.chat.id, "Некорректный ввод.")
 
-                if not chats[chat_numb].get_forward() and message.forward_date:
-                    bot.delete_message(message.chat.id, message.message_id)
+                elif us.get_user_id() == message.chat.id and us.get_can_change_group_banned():
+                    if message.forward_from_chat:
+                        try:
+                            bot.get_chat_member(message.forward_from_chat.id, us.get_user_id())
+                            chats[chat_numb].set_banned_chanel(message.forward_from_chat.id)
+                            chats[chat_numb].set_banned_chanel_name(message.forward_from_chat.username)
+                            us.set_can_change_group_banned(False)
+                            is_any = True
+                            banned_user(message)
+                        except Exception:
+                            bot.send_message(message.chat.id, "Сперва добавьте бота в канал.")
+                            is_any = True
+                elif us.get_user_id() == message.chat.id and us.get_can_change_friend_banned():
+                    is_any = True
+                    if message.text.isdigit():
+                        if 0 < int(message.text) <= 30:
+                            chats[chat_numb].set_banned_friend(int(message.text))
+                            us.set_can_change_friend_banned(False)
+                            banned_user(message)
+                        else:
+                            bot.send_message(message.chat.id, "Число должно быть в диапазоне 0-30")
+                    else:
+                        bot.send_message(message.chat.id, "Некорректный ввод.")
+
+                elif us.get_user_id() == message.chat.id and us.get_can_change_links():
+                    is_any = True
+                    text_lst = message.text.split(" ")
+                    if re.search(r'\bhttps://\b', message.text) and len(text_lst) == 1:
+                        us.set_can_change_links(False)
+                        us.set_can_change_names(True)
+                        chats[chat_numb].add_button_links(message.text)
+
+                        bot.send_message(message.chat.id, "Теперь напишите название кнопки")
+                    else:
+                        bot.send_message(message.chat.id, "Некорректный ввод.")
+
+                elif us.get_user_id() == message.chat.id and us.get_can_change_names():
+                    is_any = True
+                    us.set_can_change_names(False)
+                    chats[chat_numb].add_button_names(message.text)
+                    chat_settings(message)
+                elif us.get_user_id() == message.chat.id and us.get_can_del_button():
+                    is_any = True
+                    if message.text.isdigit():
+                        if 0 < int(message.text) <= amount_buttons:
+                            try:
+                                links_but = chats[chat_numb].get_button_links()
+                                names_but = chats[chat_numb].get_button_names()
+                                links_but.__delitem__(int(message.text) - 1)
+                                names_but.__delitem__(int(message.text) - 1)
+                                chats[chat_numb].set_button_links(links_but)
+                                chats[chat_numb].set_button_names(names_but)
+                            except Exception as e:
+                                print(e)
+
+                            us.set_can_del_button(False)
+                            buttons(message)
+                        else:
+                            bot.send_message(message.chat.id, "Такой кнопки нет.")
+                    else:
+                        bot.send_message(message.chat.id, "Некорректный ввод.")
+                elif us.get_user_id() == message.chat.id and us.get_can_change_button_time():
+
+                    is_any = True
+                    if message.text.isdigit():
+                        if 0 <= int(message.text) <= 10080:
+                            chats[chat_numb].set_buttons_time(int(message.text))
+                            us.set_can_change_button_time(False)
+                            buttons(message)
+                        else:
+                            bot.send_message(message.chat.id, "Число должно быть в диапазоне 0-10080")
+                    else:
+                        bot.send_message(message.chat.id, "Некорректный ввод.")
+                elif us.get_user_id() == message.chat.id and us.get_can_change_welcome_text():
+                    is_any = True
+                    chats[chat_numb].set_welcome_text(message.text)
+                    us.set_can_change_welcome_text(False)
+                    welcome(message)
+
+            if not is_any:
+                bot.send_message(message.chat.id, "Извините, я не понял.")
+
+        else:
+            try:
+                admins = []
+                for admin in bot.get_chat_administrators(message.chat.id):
+                    admins.append(admin.user.id)
+                    if admin.status == "creator" and not is_chat(message.chat.id):
+                        chats.append(Chat(admin.user.id, message.chat.id))
+                chat_numb = get_chat(message.chat.id)
+                users_in_chat = chats[chat_numb].get_users_in_chat()
+                for us in users_in_chat:
+                    if chats[chat_numb].get_banned_friend() != 0 and us.get_user_id() \
+                            and chats[chat_numb].get_banned_friend_every() == 1:
+                        if us.get_friends_count() > 0:
+                            us.set_friends_count(us.get_friends_count() - 1)
+
+                if not chats[chat_numb].is_user_in_chat(message.from_user.id):
+                    chats[chat_numb].add_user_in_chat(message.from_user.id)
+                words = chats[chat_numb].get_banned_words()
+                text = message.text.lower()
+                try:
+                    for word in words:
+                        if re.search(rf'\b{word.lower()}\b', text) and not (message.from_user.id in admins):
+                            bot.delete_message(message.chat.id, message.message_id)
+                            break
+                    if not chats[chat_numb].get_links():
+                        if re.search(r'\bhttps://\b', message.text):
+                            bot.delete_message(message.chat.id, message.message_id)
+
+                    if not chats[chat_numb].get_forward() and message.forward_date:
+                        bot.delete_message(message.chat.id, message.message_id)
+                except Exception as e:
+                    print(e)
             except Exception as e:
                 print(e)
-        except Exception as e:
-            print(e)
+    except Exception as e:
+        print(e)
 
 
 if __name__ == "__main__":
@@ -1296,10 +1366,8 @@ if __name__ == "__main__":
         try:
             x = threading.Thread(target=check_banned)
             x.start()
-            bot.polling()
+            bot.polling(none_stop=True)
 
         except Exception as e:
             print(e)
-            del bot
-            del x
-            bot = telebot.TeleBot(token=token)
+            time.sleep(5)
