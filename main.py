@@ -17,9 +17,7 @@ class UserInBot:
         self.__user_id = user_id
         self.__can_change = False
         self.__can_change_words = False
-        self.__can_change_links = False
-        self.__can_change_names = False
-        self.__can_del_button = False
+        self.__can_change_buttons = False
         self.__can_change_welcome_text = False
         self.__can_change_photo = False
         self.__can_change_gif = False
@@ -62,14 +60,11 @@ class UserInBot:
     def set_can_change_friend_banned(self, can_change_friend_banned):
         self.__can_change_friend_banned = can_change_friend_banned
 
-    def get_can_change_links(self):
-        return self.__can_change_links
+    def get_can_change_buttons(self):
+        return self.__can_change_buttons
 
-    def set_can_change_links(self, can_change_links):
-        self.__can_change_links = can_change_links
-
-    def get_can_change_names(self):
-        return self.__can_change_names
+    def set_can_change_buttons(self, can_change_buttons):
+        self.__can_change_buttons = can_change_buttons
 
     def set_can_change_photo(self, can_change_photo):
         self.__can_change_photo = can_change_photo
@@ -83,20 +78,11 @@ class UserInBot:
     def get_can_change_gif(self):
         return self.__can_change_gif
 
-    def set_can_change_names(self, can_change_names):
-        self.__can_change_names = can_change_names
-
     def get_can_change_welcome_text(self):
         return self.__can_change_welcome_text
 
     def set_can_change_welcome_text(self, can_change_welcome_text):
         self.__can_change_welcome_text = can_change_welcome_text
-
-    def get_can_del_button(self):
-        return self.__can_del_button
-
-    def set_can_del_button(self, can_del_button):
-        self.__can_del_button = can_del_button
 
     def get_can_change_button_time(self):
         return self.__can_change_button_time
@@ -180,8 +166,7 @@ class Chat:
         self.__owner_id = owner_id
         self.__chat_id = chat_id
         self.__banned_words = []
-        self.__button_links = []
-        self.__button_names = []
+        self.__buttons = []
         self.__links = True
         self.__forward = True
         self.__welcome = False
@@ -201,6 +186,8 @@ class Chat:
         self.__banned_friend_every = 0
         self.__previous_message = 0
         self.__previous_message_by_time = 0
+        self.__previous_data = 0
+        self.__previous_data_by_time = 0
         self.__users_in_chat = []
         self.__new_users_in_chat = []
 
@@ -246,6 +233,12 @@ class Chat:
     def set_buttons_time(self, buttons_time):
         self.__buttons_time = buttons_time
 
+    def get_buttons(self):
+        return self.__buttons
+
+    def set_buttons(self, buttons):
+        self.__buttons = buttons
+
     def get_welcome_photo(self):
         return self.__welcome_photo
 
@@ -278,24 +271,6 @@ class Chat:
             if us.get_user_id() == user_id:
                 return True
         return False
-
-    def get_button_links(self):
-        return self.__button_links
-
-    def set_button_links(self, button_links):
-        self.__button_links = button_links
-
-    def add_button_links(self, link):
-        self.__button_links.append(link)
-
-    def get_button_names(self):
-        return self.__button_names
-
-    def set_button_names(self, button_names):
-        self.__button_names = button_names
-
-    def add_button_names(self, name):
-        self.__button_names.append(name)
 
     def set_when_posted_button(self, when_posted_button):
         self.__when_posted_button = when_posted_button
@@ -369,6 +344,18 @@ class Chat:
     def set_previous_message_by_time(self, previous_message_by_time):
         self.__previous_message_by_time = previous_message_by_time
 
+    def get_previous_data(self):
+        return self.__previous_data
+
+    def set_previous_data(self, previous_data):
+        self.__previous_data = previous_data
+
+    def get_previous_data_by_time(self):
+        return self.__previous_data_by_time
+
+    def set_previous_data_by_time(self, previous_data_by_time):
+        self.__previous_data_by_time = previous_data_by_time
+
 
 def is_user(user_id):
     for us in users:
@@ -417,6 +404,29 @@ def chat_number(user_id):
         return counter
 
 
+def get_buttons(buttons_lst):
+    keyboard = types.InlineKeyboardMarkup()
+    for row in buttons_lst:
+        buts = []
+        for el in row:
+            but = el.split(": ")
+            buts.append(types.InlineKeyboardButton(text=but[0], url=but[1]))
+        keyboard.add(*[but for but in buts])
+    return keyboard
+
+
+def add_slash(string):
+    counter = 0
+    added = 0
+    for i in string:
+        if i == ".":
+            string = string[0:counter + added] + "\\" + string[counter + added:len(string)]
+            added += 1
+        counter += 1
+
+    return  string
+
+
 def start_buttons():
     key = types.InlineKeyboardMarkup()
     but_1 = types.InlineKeyboardButton(text="Новости", callback_data="news")
@@ -439,13 +449,8 @@ def settings_buttons(chat_numb):
     else:
         forward_txt = "(запрещены)"
 
-    if chats[chat_numb].get_welcome():
-        welcome_txt = "(включено)"
-    else:
-        welcome_txt = "(выключено)"
-
     key = types.InlineKeyboardMarkup()
-    but_1 = types.InlineKeyboardButton(text="Приветствие" + welcome_txt, callback_data="welcome")
+    but_1 = types.InlineKeyboardButton(text="Приветствие", callback_data="welcome")
     but_2 = types.InlineKeyboardButton(text="Кнопки под приветствием", callback_data="buttons")
     but_3 = types.InlineKeyboardButton(text="Запреты постить", callback_data="banned_user")
     but_4 = types.InlineKeyboardButton(text="Запрещённые слова", callback_data="banned_words")
@@ -775,8 +780,6 @@ def welcome(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception as e:
         pass
-    number = get_user(call.from_user.id)
-    users[number].set_can_del_button(False)
     chat_numb = chat_number(call.from_user.id)
     if chats[chat_numb].get_welcome():
         new_txt = "(включено)"
@@ -855,6 +858,20 @@ def welcome_time(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception as e:
         pass
+    key = types.InlineKeyboardMarkup()
+    but_1 = types.InlineKeyboardButton(text="Изменить время приветствия", callback_data="change_welcome_time")
+    but_2 = types.InlineKeyboardButton(text="Назад", callback_data="welcome")
+    key.add(but_1)
+    key.add(but_2)
+    bot.send_message(call.from_user.id, "Выберите действие", reply_markup=key)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "change_welcome_time")
+def change_welcome_time(call):
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        pass
     number = get_user(call.from_user.id)
     users[number].set_can_change_button_time(True)
 
@@ -870,12 +887,20 @@ def show_text_welcome(call):
         pass
     chat_numb = chat_number(call.from_user.id)
     text = chats[chat_numb].get_welcome_text()
+
     keyboard = types.InlineKeyboardMarkup()
 
     keyboard.add(types.InlineKeyboardButton(text="Назад", callback_data="welcome"))
-    if chats[chat_numb].get_welcome_photo() or chats[chat_numb].get_welcome_gif():
+
+    if chats[chat_numb].get_welcome_photo():
         photo = open(str(chats[chat_numb].get_chat_id()), 'rb')
-        bot.send_photo(call.from_user.id, photo, text, reply_markup=keyboard, parse_mode='MarkdownV2')
+        bot.send_photo(call.from_user.id, photo)
+        bot.send_message(call.from_user.id, text, reply_markup=keyboard, parse_mode='MarkdownV2')
+    elif chats[chat_numb].get_welcome_gif():
+        gif_mes = open(str(chats[chat_numb].get_chat_id()) + ".gif", 'rb')
+        bot.send_animation(call.from_user.id, gif_mes)  
+        bot.send_message(call.from_user.id, text, reply_markup=keyboard, parse_mode='MarkdownV2')
+
     else:
         bot.send_message(call.from_user.id, text, reply_markup=keyboard, parse_mode='MarkdownV2')
 
@@ -988,8 +1013,6 @@ def buttons(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception as e:
         pass
-    number = get_user(call.from_user.id)
-    users[number].set_can_del_button(False)
     chat_numb = chat_number(call.from_user.id)
     if chats[chat_numb].get_buttons_new():
         buttons_new_txt = "(включено)"
@@ -997,11 +1020,11 @@ def buttons(call):
         buttons_new_txt = "(выключено)"
 
     key = types.InlineKeyboardMarkup()
-    but_1 = types.InlineKeyboardButton(text="Добавить кнопку", callback_data="add_button")
-    but_2 = types.InlineKeyboardButton(text="Публиковать для новых игроков"+buttons_new_txt,
+    but_1 = types.InlineKeyboardButton(text="Изменить кнопки", callback_data="add_button")
+    but_2 = types.InlineKeyboardButton(text="Кнопки под приветствием"+buttons_new_txt,
                                        callback_data="turn_on_buttons_new")
     but_3 = types.InlineKeyboardButton(text="Показать кнопки", callback_data="show_buttons")
-    but_4 = types.InlineKeyboardButton(text="Удалить кнопку", callback_data="del_button")
+    but_4 = types.InlineKeyboardButton(text="Удалить кнопки", callback_data="del_button")
     but_5 = types.InlineKeyboardButton(text="Назад", callback_data="chat_settings")
 
     key.add(but_1)
@@ -1018,9 +1041,26 @@ def add_button(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception as e:
         pass
+    keyboard = types.InlineKeyboardMarkup()
+    but_1 = types.InlineKeyboardButton(text="Поставить новые кнопки", callback_data="add_all_button")
+    but_2 = types.InlineKeyboardButton(text="Назад", callback_data="buttons")
+    keyboard.add(but_1)
+    keyboard.add(but_2)
+
+    bot.send_message(call.from_user.id, "Выберите действие", reply_markup=keyboard)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "add_all_button")
+def add_all_button(call):
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        pass
     number = get_user(call.from_user.id)
-    users[number].set_can_change_links(True)
-    bot.send_message(call.from_user.id, "Пришлите ссылку.")
+    users[number].set_can_change_buttons(True)
+    bot.send_message(call.from_user.id, "Пришлите кнопки в таком формате:\nТекст 1: http://\n"
+                                        "Текст 1: http://&&Текст 2: http://\n"
+                                        "Текст 1: http://&&Текст 2: http://&&Текст 3: http://\n")
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "del_button")
@@ -1029,21 +1069,24 @@ def del_button(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception as e:
         pass
+    keyboard = types.InlineKeyboardMarkup()
+    but_1 = types.InlineKeyboardButton(text="Удалить все кнопки", callback_data="clean_buttons")
+    but_2 = types.InlineKeyboardButton(text="Назад", callback_data="buttons")
+    keyboard.add(but_1)
+    keyboard.add(but_2)
+
+    bot.send_message(call.from_user.id, "Выберите действие", reply_markup=keyboard)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "clean_buttons")
+def clean_buttons(call):
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        pass
     chat_numb = chat_number(call.from_user.id)
-    number = get_user(call.from_user.id)
-
-    names = chats[chat_numb].get_button_names()
-    txt = "Введите номер кнопки, которую хотите удалить:\n"
-
-    for i in range(len(names)):
-        txt += names[i] + " - " + str(i+1) + "\n"
-
-    if len(names) == 0:
-        txt = "Кнопок нет"
-
-    users[number].set_can_del_button(True)
-
-    bot.send_message(call.from_user.id, txt)
+    chats[chat_numb].set_buttons([])
+    buttons(call)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "show_buttons")
@@ -1052,19 +1095,14 @@ def show_buttons(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception as e:
         pass
-    chat_numb = chat_number(call.from_user.id)
-    links = chats[chat_numb].get_button_links()
-    names = chats[chat_numb].get_button_names()
 
     keyboard = types.InlineKeyboardMarkup()
-
-    for i in range(len(names)):
-        keyboard.add(types.InlineKeyboardButton(text=names[i], url=links[i]))
-
-    if len(names) == 0:
-        txt = "Кнопок нет"
+    chat_numb = chat_number(call.from_user.id)
+    if chats[chat_numb].get_buttons():
+        keyboard = get_buttons(chats[chat_numb].get_buttons())
+        txt = "Кнопки под приветствием"
     else:
-        txt = "Кнопки:"
+        txt = "Кнопок нет"
 
     keyboard.add(types.InlineKeyboardButton(text="Назад", callback_data="buttons"))
     bot.send_message(call.from_user.id, txt, reply_markup=keyboard)
@@ -1128,34 +1166,40 @@ def new_member(message):
                         bot.restrict_chat_member(chats[chat_numb].get_chat_id(), us.get_user_id())
 
                         us.set_is_group_banned(True)
-
         try:
             bot.delete_message(message.chat.id, chats[chat_numb].get_previous_message())
         except Exception as e:
             print(e)
-        text = name + ". "+chats[chat_numb].get_welcome_text()
+
+        try:
+            bot.delete_message(message.chat.id, chats[chat_numb].get_previous_data())
+        except Exception:
+            pass
+        text = name + ", "+chats[chat_numb].get_welcome_text()
+        keyboard = types.InlineKeyboardMarkup()
         if chats[chat_numb].get_buttons_new():
-            links = chats[chat_numb].get_button_links()
-            names = chats[chat_numb].get_button_names()
-            keyboard = types.InlineKeyboardMarkup()
-            for i in range(len(names)):
-                keyboard.add(types.InlineKeyboardButton(text=names[i], url=links[i]))
+            keyboard = get_buttons(chats[chat_numb].get_buttons())
 
-        if chats[chat_numb].get_welcome_photo() or chats[chat_numb].get_welcome_gif():
-            photo = open(str(chats[chat_numb].get_chat_id()), 'rb')
+        if chats[chat_numb].get_welcome():
+            if chats[chat_numb].get_welcome_photo():
+                photo = open(str(chats[chat_numb].get_chat_id()), 'rb')
+                mes1 = bot.send_message(chats[chat_numb].get_chat_id(), text, reply_markup=keyboard,
+                                        parse_mode='MarkdownV2')
+                chats[chat_numb].set_previous_message(mes1.message_id)
 
-        if (chats[chat_numb].get_welcome_photo() or chats[chat_numb].get_welcome_gif()) and not chats[chat_numb].get_buttons_new():
-            mes = bot.send_photo(message.chat.id, photo, text, parse_mode='MarkdownV2')
-            chats[chat_numb].set_previous_message(mes.message_id)
-        elif chats[chat_numb].get_buttons_new() and not (chats[chat_numb].get_welcome_photo() or chats[chat_numb].get_welcome_gif()):
-            mes = bot.send_message(message.chat.id, text, reply_markup=keyboard, parse_mode='MarkdownV2')
-            chats[chat_numb].set_previous_message(mes.message_id)
-        elif (chats[chat_numb].get_welcome_photo() or chats[chat_numb].get_welcome_gif()) and chats[chat_numb].get_buttons_new():
-            mes = bot.send_photo(message.chat.id, photo, text, reply_markup=keyboard, parse_mode='MarkdownV2')
-            chats[chat_numb].set_previous_message(mes.message_id)
-        else:
-            mes = bot.send_message(message.chat.id, text, parse_mode='MarkdownV2')
-            chats[chat_numb].set_previous_message(mes.message_id)
+                mes2 = bot.send_photo(chats[chat_numb].get_chat_id(), photo)
+                chats[chat_numb].set_previous_data(mes2.message_id)
+
+            elif chats[chat_numb].get_welcome_gif():
+                gif_mes = open(str(chats[chat_numb].get_chat_id()) + ".gif", 'rb')
+                mes1 = bot.send_message(chats[chat_numb].get_chat_id(), text, reply_markup=keyboard, parse_mode='MarkdownV2')
+                chats[chat_numb].set_previous_message(mes1.message_id)
+
+                mes2 = bot.send_animation(chats[chat_numb].get_chat_id(), gif_mes)
+                chats[chat_numb].set_previous_data(mes2.message_id)
+            else:
+                mes = bot.send_message(message.chat.id, text, reply_markup=keyboard, parse_mode='MarkdownV2')
+                chats[chat_numb].set_previous_message(mes.message_id)
 
         bot.delete_message(message.chat.id, message.message_id)
     except Exception as e:
@@ -1176,28 +1220,38 @@ def check_banned():
         if time.time() - old_time > 1:
             for chat in chats:
                 if time.time() - chat.get_when_posted_button() > chat.get_buttons_time() * 60 and chat.get_buttons_time() != 0:
-
-                    text = chat.get_welcome_text()
-                    links = chat.get_button_links()
-                    names = chat.get_button_names()
-                    keyboard = types.InlineKeyboardMarkup()
-                    for i in range(len(names)):
-                        keyboard.add(types.InlineKeyboardButton(text=names[i], url=links[i]))
-                    chat.set_when_posted_button(time.time())
                     try:
                         bot.delete_message(chat.get_chat_id(), chat.get_previous_message_by_time())
                     except Exception:
                         pass
+                    try:
+                        bot.delete_message(chat.get_chat_id(), chat.get_previous_data_by_time())
+                    except Exception:
+                        pass
+                    text = chat.get_welcome_text()
+                    keyboard = get_buttons(chat.get_buttons())
+                    chat.set_when_posted_button(time.time())
 
-                    if keyboard.keyboard:
-                        if chat.get_welcome_photo() or chat.get_welcome_gif():
-                            photo = open(str(chat.get_chat_id()), 'rb')
-                            #bot.send_photo()
-                            mes = bot.send_animation(chat.get_chat_id(), photo, text, reply_markup=keyboard, parse_mode='MarkdownV2')
-                            chat.set_previous_message_by_time(mes.message_id)
-                        else:
-                            mes = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard, parse_mode='MarkdownV2')
-                            chat.set_previous_message_by_time(mes.message_id)
+                    if chat.get_welcome_photo():
+                        photo = open(str(chat.get_chat_id()), 'rb')
+                        mes1 = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard,
+                                                parse_mode='MarkdownV2')
+                        chat.set_previous_message_by_time(mes1.message_id)
+
+                        mes2 = bot.send_photo(chat.get_chat_id(), photo)
+                        chat.set_previous_data_by_time(mes2.message_id)
+
+                    elif chat.get_welcome_gif():
+                        gif_mes = open(str(chat.get_chat_id()) + ".gif", 'rb')
+                        mes1 = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard, parse_mode='MarkdownV2')
+                        chat.set_previous_message_by_time(mes1.message_id)
+
+                        mes2 = bot.send_animation(chat.get_chat_id(), gif_mes)
+                        chat.set_previous_data_by_time(mes2.message_id)
+
+                    else:
+                        mes = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard, parse_mode='MarkdownV2')
+                        chat.set_previous_message_by_time(mes.message_id)
 
                 users_in_chat = chat.get_users_in_chat()
                 for us in users_in_chat:
@@ -1268,7 +1322,6 @@ def photo_handler(message):
 
 @bot.message_handler(content_types=['document'])
 def gif_handler(message):
-    print(message)
     if message.chat.id > 0:
         is_any = False
         try:
@@ -1278,26 +1331,28 @@ def gif_handler(message):
         for us in users:
             if us.get_user_id() == message.chat.id and us.get_can_change_gif():
                 is_any = True
-                us.set_can_change_gif(False)
-                chats[chat_numb].set_welcome_photo(False)
-                chats[chat_numb].set_welcome_gif(True)
-                fileID = message.document.file_id
-                file_info = bot.get_file(fileID)
+                try:
+                    if message.document.thumb.file_size < 500000:
+                        us.set_can_change_gif(False)
+                        chats[chat_numb].set_welcome_photo(False)
+                        chats[chat_numb].set_welcome_gif(True)
+                        fileID = message.document.file_id
+                        file_info = bot.get_file(fileID)
 
-                downloaded_file = bot.download_file(file_info.file_path)
-                with open(str(chats[chat_numb].get_chat_id()), 'wb') as new_file:
-                    new_file.write(downloaded_file)
-                welcome(message)
+                        downloaded_file = bot.download_file(file_info.file_path)
+                        with open(str(chats[chat_numb].get_chat_id()) + ".gif", 'wb') as new_file:
+                            new_file.write(downloaded_file)
+                        welcome(message)
+                    else:
+                        bot.send_message(message.chat.id, "Гиф слишком большая.")
+                except Exception:
+                    bot.send_message(message.chat.id, "Что-то не так, пришлите еще раз.")
         if not is_any:
             bot.send_message(message.chat.id, "Извините, я не понял.")
 
 
 @bot.message_handler()
 def message_handler(message):
-    txt = message.text
-    for i in txt.split("\n"):
-        print(i)
-
     try:
         if message.chat.id > 0:
             names = []
@@ -1308,7 +1363,6 @@ def message_handler(message):
             is_any = False
             try:
                 chat_numb = chat_number(message.chat.id)
-                amount_buttons = len(chats[chat_numb].get_button_names())
             except Exception:
                 pass
             for us in users:
@@ -1366,42 +1420,24 @@ def message_handler(message):
                     else:
                         bot.send_message(message.chat.id, "Некорректный ввод.")
 
-                elif us.get_user_id() == message.chat.id and us.get_can_change_links():
+                elif us.get_user_id() == message.chat.id and us.get_can_change_buttons():
                     is_any = True
-                    text_lst = message.text.split(" ")
-                    if re.search(r'\bhttps://\b', message.text) and len(text_lst) == 1:
-                        us.set_can_change_links(False)
-                        us.set_can_change_names(True)
-                        chats[chat_numb].add_button_links(message.text)
+                    text_lst = message.text
+                    lst_buttons = []
 
-                        bot.send_message(message.chat.id, "Теперь напишите название кнопки")
-                    else:
-                        bot.send_message(message.chat.id, "Некорректный ввод.")
-
-                elif us.get_user_id() == message.chat.id and us.get_can_change_names():
-                    is_any = True
-                    us.set_can_change_names(False)
-                    chats[chat_numb].add_button_names(message.text)
-                    chat_settings(message)
-                elif us.get_user_id() == message.chat.id and us.get_can_del_button():
-                    is_any = True
-                    if message.text.isdigit():
-                        if 0 < int(message.text) <= amount_buttons:
-                            try:
-                                links_but = chats[chat_numb].get_button_links()
-                                names_but = chats[chat_numb].get_button_names()
-                                links_but.__delitem__(int(message.text) - 1)
-                                names_but.__delitem__(int(message.text) - 1)
-                                chats[chat_numb].set_button_links(links_but)
-                                chats[chat_numb].set_button_names(names_but)
-                            except Exception as e:
-                                print(e)
-
-                            us.set_can_del_button(False)
-                            buttons(message)
-                        else:
-                            bot.send_message(message.chat.id, "Такой кнопки нет.")
-                    else:
+                    counter = 0
+                    for row in text_lst.split("\n"):
+                        lst_buttons.append([])
+                        for el in row.split("&&"):
+                            lst_buttons[counter].append(el)
+                        counter += 1
+                    try:
+                        buts = get_buttons(lst_buttons)
+                        buts.add(types.InlineKeyboardButton(text="Назад", callback_data="buttons"))
+                        bot.send_message(message.chat.id, "Кнопки:", reply_markup=buts)
+                        chats[chat_numb].set_buttons(lst_buttons)
+                        us.set_can_change_buttons(False)
+                    except Exception:
                         bot.send_message(message.chat.id, "Некорректный ввод.")
                 elif us.get_user_id() == message.chat.id and us.get_can_change_button_time():
 
@@ -1410,14 +1446,15 @@ def message_handler(message):
                         if 0 <= int(message.text) <= 10080:
                             chats[chat_numb].set_buttons_time(int(message.text))
                             us.set_can_change_button_time(False)
-                            buttons(message)
+                            welcome(message)
                         else:
                             bot.send_message(message.chat.id, "Число должно быть в диапазоне 0-10080")
                     else:
                         bot.send_message(message.chat.id, "Некорректный ввод.")
                 elif us.get_user_id() == message.chat.id and us.get_can_change_welcome_text():
                     is_any = True
-                    chats[chat_numb].set_welcome_text(message.text)
+                    text = add_slash(message.text)
+                    chats[chat_numb].set_welcome_text(text)
                     us.set_can_change_welcome_text(False)
                     welcome(message)
 
