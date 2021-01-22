@@ -135,6 +135,46 @@ class UserInBot:
         self.__number_chat = number_chat
 
 
+class UserAdmin:
+    def __init__(self, user_id):
+        self.__user_id = user_id
+        self.__can_input_chat = False
+        self.__can_input_chat_del = False
+        self.__inputted_chat = 0
+        self.__inputted_del_chat = 0
+
+    def set_can_input_chat(self, can_input_chat):
+        self.__can_input_chat = can_input_chat
+
+    def get_can_input_chat(self):
+        return self.__can_input_chat
+
+    def set_can_input_chat_del(self, can_input_chat_del):
+        self.__can_input_chat_del = can_input_chat_del
+
+    def get_can_input_chat_del(self):
+        return self.__can_input_chat_del
+
+    def set_inputted_chat(self, inputted_chat):
+        self.__inputted_chat = inputted_chat
+
+    def get_inputted_chat(self):
+        return self.__inputted_chat
+
+    def set_inputted_del_chat(self, inputted_del_chat):
+        self.__inputted_del_chat = inputted_del_chat
+
+    def get_inputted_del_chat(self):
+        return self.__inputted_del_chat
+
+    def get_user_id(self):
+        return self.__user_id
+
+
+yura = UserAdmin(443109443)
+serg = UserAdmin(391152196)
+
+
 class UserInChat:
     def __init__(self, user_id):
         self.__user_id = user_id
@@ -595,6 +635,219 @@ def settings_buttons(chat_numb):
     return key
 
 
+@bot.message_handler(commands=["admin"])
+def admin(message):
+    try:
+        if message.chat.id == 443109443 or message.chat.id == 391152196:
+            try:
+                bot.delete_message(message.chat.id, message.message_id)
+            except Exception as e:
+                pass
+
+            key = types.InlineKeyboardMarkup()
+            but_1 = types.InlineKeyboardButton(text="Посмотреть все чаты ",
+                                               callback_data="show_chats")
+
+            but_2 = types.InlineKeyboardButton(text="Удалить бота из группы ",
+                                               callback_data="del_bot_input")
+            key.add(but_1)
+            key.add(but_2)
+
+            bot.send_message(message.chat.id, "Выберите действие", reply_markup=key, parse_mode='Markdown')
+    except Exception:
+        pass
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "admin")
+def admin(call):
+    try:
+        if call.message.chat.id == 443109443 or call.message.chat.id == 391152196:
+            try:
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception as e:
+                pass
+
+            key = types.InlineKeyboardMarkup()
+            but_1 = types.InlineKeyboardButton(text="Посмотреть все чаты ",
+                                               callback_data="show_chats")
+
+            but_2 = types.InlineKeyboardButton(text="Удалить бота из группы ",
+                                               callback_data="del_bot_input")
+            key.add(but_1)
+            key.add(but_2)
+
+            bot.send_message(call.message.chat.id, "Выберите действие", reply_markup=key, parse_mode='Markdown')
+    except Exception:
+        pass
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "show_chats")
+def show_chats(call):
+    try:
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception as e:
+            pass
+
+        key = types.InlineKeyboardMarkup()
+        but_1 = types.InlineKeyboardButton(text="Детальнее про чат",
+                                           callback_data="chat_details_input")
+        but_2 = types.InlineKeyboardButton(text="Назад",
+                                           callback_data="admin")
+
+        key.add(but_1)
+        key.add(but_2)
+        names = []
+        for chat in chats:
+            try:
+                if bot.get_chat(chat.get_chat_id()).username:
+                    names.append("@"+bot.get_chat(chat.get_chat_id()).username)
+                else:
+                    names.append(bot.get_chat(chat.get_chat_id()).title)
+            except Exception as e:
+                print(e)
+
+        text = ""
+        for i in range(len(names)):
+            text += str(i + 1) + ". " + names[i] + "\n"
+
+        bot.send_message(call.message.chat.id, text, parse_mode='Markdown')
+        bot.send_message(call.message.chat.id, "Выберите действие", reply_markup=key, parse_mode='Markdown')
+    except Exception as e:
+        print(e)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "chat_details_input")
+def chat_details_input(call):
+    try:
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception as e:
+            pass
+
+        if call.from_user.id == 443109443:
+            yura.set_can_input_chat(True)
+
+        elif call.from_user.id == 391152196:
+            serg.set_can_input_chat(True)
+
+        bot.send_message(call.from_user.id, "Введите номер чата")
+    except Exception as e:
+        print(e)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "chat_details")
+def chat_details(call):
+    try:
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception as e:
+            pass
+
+        if call.from_user.id == 443109443:
+            inputted_chat = yura.get_inputted_chat()
+
+        elif call.from_user.id == 391152196:
+            inputted_chat = serg.get_inputted_chat()
+
+        chat = chats[inputted_chat - 1]
+        chat_info = bot.get_chat(chat.get_chat_id())
+        chat_id = str(chat_info.id)
+        chat_type = chat_info.type
+        chat_title = chat_info.title
+        chat_username = chat_info.username
+        amount_members = str(bot.get_chat_members_count(chat.get_chat_id()))
+        chat_admins = bot.get_chat_administrators(chat.get_chat_id())
+        text_admins = ""
+        for adm in chat_admins:
+            text_admins += f"[{adm.user.first_name}](tg://user?id={str(adm.user.id)}) "
+
+        text = f"Название чата: {chat_title}\nЮзернэйм чата: @{chat_username}\n" \
+               f"Айди чата: {chat_id}\nТип чата: {chat_type}\nКоличество участников: {amount_members}\n" \
+               f"Админы чата: {text_admins}"
+        bot.send_message(call.from_user.id, text, parse_mode='Markdown')
+    except Exception as e:
+        print(e)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "del_bot_input")
+def del_bot_input(call):
+    try:
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception as e:
+            pass
+
+        if call.from_user.id == 443109443:
+            yura.set_can_input_chat_del(True)
+
+        elif call.from_user.id == 391152196:
+            serg.set_can_input_chat_del(True)
+
+        bot.send_message(call.from_user.id, "Введите номер чата")
+    except Exception as e:
+        print(e)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "del_bot")
+def del_bot(call):
+    try:
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception as e:
+            pass
+
+        if call.from_user.id == 443109443:
+            inputted_chat = yura.get_inputted_del_chat()
+
+        elif call.from_user.id == 391152196:
+            inputted_chat = serg.get_inputted_del_chat()
+
+        chat = chats[inputted_chat - 1]
+        chat_info = bot.get_chat(chat.get_chat_id())
+        chat_username = chat_info.username
+        if chat_username:
+            text = "@"+chat_username
+        else:
+            text = chat_info.title
+
+        key = types.InlineKeyboardMarkup()
+        but_1 = types.InlineKeyboardButton(text="Да",
+                                           callback_data="yes_del_bot")
+        but_2 = types.InlineKeyboardButton(text="Нет, назад",
+                                           callback_data="admin")
+
+        key.add(but_1)
+        key.add(but_2)
+
+        bot.send_message(call.from_user.id, "Желаете удалить этот чат? " + text, reply_markup=key)
+    except Exception as e:
+        print(e)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "yes_del_bot")
+def yes_del_bot(call):
+    try:
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception as e:
+            pass
+
+        if call.from_user.id == 443109443:
+            inputted_chat = yura.get_inputted_del_chat()
+
+        elif call.from_user.id == 391152196:
+            inputted_chat = serg.get_inputted_del_chat()
+
+        chat = chats[inputted_chat - 1]
+        bot.leave_chat(chat.get_chat_id())
+        chats.remove(chat)
+        bot.send_message(call.message.chat.id, "Бот был успешно удален из чата")
+        admin(call)
+    except Exception as e:
+        print(e)
+
+
 @bot.message_handler(commands=["start"])
 def start(message):
     if message.chat.id > 0:
@@ -657,7 +910,10 @@ def my_chats(call):
             if chat.get_owner_id() == call.from_user.id:
                 for admin in bot.get_chat_administrators(chat.get_chat_id()):
                     if admin.status == "creator" and admin.user.id == call.from_user.id:
-                        names.append(bot.get_chat(chat.get_chat_id()).title)
+                        if bot.get_chat(chat.get_chat_id()).username:
+                            names.append("@" + bot.get_chat(chat.get_chat_id()).username)
+                        else:
+                            names.append(bot.get_chat(chat.get_chat_id()).title)
 
         if not names:
             bot.send_message(call.from_user.id, "У вас нет чатов с ботом")
@@ -666,11 +922,12 @@ def my_chats(call):
                 bot.delete_message(call.message.chat.id, call.message.message_id)
             except Exception as e:
                 pass
+
             number = get_user(call.from_user.id)
             users[number].set_can_change(True)
             txt = "Введите номер чата\n"
             for i in range(len(names)):
-                txt += names[i] + " - " + str(i + 1) + "\n"
+                txt += str(i + 1) + ". " + names[i] + "\n"
             bot.send_message(call.from_user.id, txt)
     except Exception:
         pass
@@ -1895,6 +2152,7 @@ def check_banned():
                                                  parse_mode='Markdown')
 
                         try:
+
                             if not us.get_is_time_banned() and not us.get_is_group_banned() \
                                     and not us.get_is_friend_banned() and not us.get_is_sleep_banned() and not us.get_is_posts_banned():
                                 bot.promote_chat_member(chat.get_chat_id(), us.get_user_id())
@@ -2009,6 +2267,42 @@ def message_handler(message):
                 chat_numb = chat_number(message.chat.id)
             except Exception:
                 pass
+            if message.chat.id == 443109443 and yura.get_can_input_chat():
+                if message.text.isdigit:
+                    yura.set_inputted_chat(int(message.text))
+                    yura.set_can_input_chat(False)
+                    is_any = True
+                    chat_details(message)
+                else:
+                    bot.send_message(message.chat.id, "Некорректный ввод.")
+
+            elif message.chat.id == 391152196 and serg.get_can_input_chat():
+                if message.text.isdigit:
+                    serg.set_inputted_chat(int(message.text))
+                    serg.set_can_input_chat(False)
+                    is_any = True
+                    chat_details(message)
+                else:
+                    bot.send_message(message.chat.id, "Некорректный ввод.")
+
+            elif message.chat.id == 443109443 and yura.get_can_input_chat_del():
+                if message.text.isdigit:
+                    yura.set_inputted_del_chat(int(message.text))
+                    yura.set_can_input_chat_del(False)
+                    is_any = True
+                    del_bot(message)
+                else:
+                    bot.send_message(message.chat.id, "Некорректный ввод.")
+
+            elif message.chat.id == 391152196 and serg.get_can_input_chat_del():
+                if message.text.isdigit:
+                    serg.set_inputted_del_chat(int(message.text))
+                    serg.set_can_input_chat_del(False)
+                    is_any = True
+                    del_bot(message)
+                else:
+                    bot.send_message(message.chat.id, "Некорректный ввод.")
+
             for us in users:
                 if us.get_user_id() == message.chat.id and us.get_can_change():
                     is_any = True
@@ -2084,7 +2378,6 @@ def message_handler(message):
                     except Exception:
                         bot.send_message(message.chat.id, "Некорректный ввод.")
                 elif us.get_user_id() == message.chat.id and us.get_can_change_button_time():
-
                     is_any = True
                     if message.text.isdigit():
                         if 0 <= int(message.text) <= 10080:
