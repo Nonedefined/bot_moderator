@@ -608,6 +608,14 @@ def add_slash(string):
     return  string
 
 
+def delete_mes(chat_id, mes_id):
+    old_time = time.time()
+    while True:
+        if time.time() - old_time > 15:
+            bot.delete_message(chat_id, mes_id)
+            break
+
+
 def start_buttons():
     key = types.InlineKeyboardMarkup()
     but_1 = types.InlineKeyboardButton(text="Новости", callback_data="news")
@@ -991,7 +999,7 @@ def banned_words(call):
         chat_numb = chat_number(call.from_user.id)
         banned_w = chats[chat_numb].get_banned_words()
         if banned_w:
-            bot.send_message(call.from_user.id, "Запрещённые слова: " + " ".join(banned_w))
+            bot.send_message(call.from_user.id, "Запрещённые слова: " + ", ".join(banned_w))
         else:
             bot.send_message(call.from_user.id, "Запрещённых слов нет")
 
@@ -1014,7 +1022,7 @@ def change_banned_words(call):
             pass
         number = get_user(call.from_user.id)
         users[number].set_can_change_words(True)
-        bot.send_message(call.from_user.id, "Введите запрещённые слова через пробел\nПример: один два три")
+        bot.send_message(call.from_user.id, "Введите запрещённые слова или фразы\nПример: один, два три")
     except Exception:
         pass
 
@@ -2178,9 +2186,11 @@ def check_banned():
                             if us.get_posts_count() >= chat.get_amount_posts():
                                 us.set_is_posts_banned(True)
                                 name = f"[Ваш](tg://user?id={str(us.get_user_id())})"
-                                bot.send_message(chat.get_chat_id(),
+                                mes = bot.send_message(chat.get_chat_id(),
                                                  name + " лимит постов на сегодня исчерпан.",
                                                  parse_mode='Markdown')
+                                th_del = threading.Thread(target=delete_mes(chat.get_chat_id(), mes.message_id))
+                                th_del.start()
 
                         try:
 
@@ -2348,7 +2358,7 @@ def message_handler(message):
                 elif us.get_user_id() == message.chat.id and us.get_can_change_words():
                     is_any = True
                     words = message.text
-                    words = words.split(" ")
+                    words = words.split(", ")
                     chats[chat_numb].set_banned_words(words)
                     us.set_can_change_words(False)
                     chat_settings(message)
@@ -2530,9 +2540,11 @@ def message_handler(message):
                                 if us.get_user_id() == message.from_user.id:
                                     us.set_violation(us.get_violation() + 1)
                             name = f"[{message.from_user.first_name}](tg://user?id={str(message.from_user.id)})"
-                            bot.send_message(message.chat.id,
+                            mes = bot.send_message(message.chat.id,
                                              name + ", Ваше сообщение было удалено, ознакомьтесь с правилами.",
                                              parse_mode='Markdown')
+                            th_del = threading.Thread(target=delete_mes(message.chat.id, mes.message_id))
+                            th_del.start()
 
                 except Exception as e:
                     print(e)
