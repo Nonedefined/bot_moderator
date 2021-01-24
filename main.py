@@ -7,12 +7,11 @@ import datetime
 import threading
 import json
 import requests
+import pickle
 
 token = "1427693199:AAGnuGWcgwUy5tLlE7_GKyomLCHKY_T5mZI"
 bot = telebot.TeleBot(token=token)
-
-users = []
-chats = []
+bot_id = 1427693199
 
 
 class UserInBot:
@@ -522,6 +521,23 @@ class Chat:
         self.__previous_data_by_time = previous_data_by_time
 
 
+try:
+    with open('users.pickle', 'rb') as f:
+        users = pickle.load(f)
+except Exception:
+    users = []
+    with open('users.pickle', 'wb') as f:
+        pickle.dump(users, f)
+
+try:
+    with open('chats.pickle', 'rb') as f:
+        chats = pickle.load(f)
+except Exception:
+    chats = []
+    with open('chats.pickle', 'wb') as f:
+        pickle.dump(chats, f)
+
+
 def is_user(user_id):
     for us in users:
         if user_id == us.get_user_id():
@@ -595,7 +611,7 @@ def add_slash(string):
 def start_buttons():
     key = types.InlineKeyboardMarkup()
     but_1 = types.InlineKeyboardButton(text="Новости", callback_data="news")
-    but_2 = types.InlineKeyboardButton(text="Поддержка", url="https://t.me/N0tdefined")
+    but_2 = types.InlineKeyboardButton(text="Поддержка", url="https://t.me/Sistems_Bot")
     but_3 = types.InlineKeyboardButton(text="Настройка чатов", callback_data="my_chats")
     but_4 = types.InlineKeyboardButton(text="Как пользоваться", callback_data="info")
     key.add(but_1, but_2)
@@ -850,18 +866,27 @@ def yes_del_bot(call):
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    if message.chat.id > 0:
-        key = start_buttons()
-        if not is_user(message.chat.id):
-            name = f"[{message.from_user.first_name}](tg://user?id={str(message.chat.id)})"
-            text = f"Добро пожаловать {name}, я бот для модерации чатов. " \
-                   f"Помогаю управлять чатами, в том числе удалять спам ссылки," \
-                   f" сообщения с нецензурной бранью и многое другое."
-            users.append(UserInBot(message.chat.id))
-        else:
-            text = "Выберите действие"
+    try:
+        with open('users.pickle', 'wb') as f:
+            pickle.dump(users, f)
 
-        bot.send_message(message.chat.id, text, reply_markup=key, parse_mode='Markdown')
+        with open('chats.pickle', 'wb') as f:
+            pickle.dump(chats, f)
+
+        if message.chat.id > 0:
+            key = start_buttons()
+            if not is_user(message.chat.id):
+                name = f"[{message.from_user.first_name}](tg://user?id={str(message.chat.id)})"
+                text = f"Добро пожаловать {name}, я бот для модерации чатов. " \
+                       f"Помогаю управлять чатами, в том числе удалять спам ссылки," \
+                       f" сообщения с нецензурной бранью и многое другое."
+                users.append(UserInBot(message.chat.id))
+            else:
+                text = "Выберите действие"
+
+            bot.send_message(message.chat.id, text, reply_markup=key, parse_mode='Markdown')
+    except Exception:
+        print(e)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "start")
@@ -895,8 +920,8 @@ def info(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.from_user.id, "Добавьте бота в свою группу (важно, для это должна быть супергруппа),"
                                             " повысьте его права"
-                                            " до администратора, далее создатель чата может"
-                                            " настроить бота (Мои чаты -> Настройка чатов)")
+                                            " до администратора, далее можете"
+                                            " настроить бота (Настройка чатов)")
         start(call)
     except Exception:
         pass
@@ -908,12 +933,10 @@ def my_chats(call):
         names = []
         for chat in chats:
             if chat.get_owner_id() == call.from_user.id:
-                for admin in bot.get_chat_administrators(chat.get_chat_id()):
-                    if admin.status == "creator" and admin.user.id == call.from_user.id:
-                        if bot.get_chat(chat.get_chat_id()).username:
-                            names.append("@" + bot.get_chat(chat.get_chat_id()).username)
-                        else:
-                            names.append(bot.get_chat(chat.get_chat_id()).title)
+                if bot.get_chat(chat.get_chat_id()).username:
+                    names.append("@" + bot.get_chat(chat.get_chat_id()).username)
+                else:
+                    names.append(bot.get_chat(chat.get_chat_id()).title)
 
         if not names:
             bot.send_message(call.from_user.id, "У вас нет чатов с ботом")
@@ -929,8 +952,8 @@ def my_chats(call):
             for i in range(len(names)):
                 txt += str(i + 1) + ". " + names[i] + "\n"
             bot.send_message(call.from_user.id, txt)
-    except Exception:
-        pass
+    except Exception as e:
+        print(e)
 
 
 @bot.message_handler(commands=[""])
@@ -1927,91 +1950,99 @@ def turn_on_buttons_new(call):
 
 @bot.message_handler(content_types=["new_chat_members"])
 def new_member(message):
-    for admin in bot.get_chat_administrators(message.chat.id):
-        if admin.status == "creator" and not is_chat(message.chat.id):
-            chats.append(Chat(admin.user.id, message.chat.id))
-
-    chat_numb = get_chat(message.chat.id)
-    users_in_chat = chats[chat_numb].get_users_in_chat()
-
-    if message.new_chat_members[0].id != message.from_user.id:
-        id_user = message.new_chat_members[0].id
-        #name = f"[{message.new_chat_members[0].first_name}](tg://user?id={str(message.new_chat_members[0].id)})"
-        name = message.new_chat_members[0].first_name
-        for us in users_in_chat:
-            friends = us.get_invited_friends()
-            if us.get_user_id() == message.from_user.id and not (message.new_chat_members[0].id in friends):
-                us.set_friends_count(us.get_friends_count() + 1)
-                us.add_invited_friends(message.new_chat_members[0].id)
-    else:
-        id_user = message.from_user.id
-        #name = f"[{message.from_user.first_name}](tg://user?id={str(message.from_user.id)})"
-        name = message.from_user.first_name
-
     try:
+        invited_by = message.from_user.id
+        invited_us = message.new_chat_members[0].id
+        admins_id = []
+        for admin in bot.get_chat_administrators(message.chat.id):
+            admins_id.append(admin.user.id)
+
+        if invited_by in admins_id and invited_us == bot_id and (not is_chat(message.chat.id)):
+            chats.append(Chat(invited_by, message.chat.id))
+
         chat_numb = get_chat(message.chat.id)
-        if not chats[chat_numb].is_user_in_chat(id_user):
-            chats[chat_numb].add_user_in_chat(id_user)
-
-        if not chats[chat_numb].is_new_user_in_chat(id_user):
-            chats[chat_numb].add_new_user_in_chat(id_user)
-
         users_in_chat = chats[chat_numb].get_users_in_chat()
-        for us in users_in_chat:
-            if us.get_user_id() == id_user:
-                if chats[chat_numb].get_banned_time() > 0:
-                    us.set_time_of_ban(chats[chat_numb].get_banned_time())
-                    us.set_when_banned(time.time())
-                    us.set_is_time_banned(True)
-                    bot.restrict_chat_member(chats[chat_numb].get_chat_id(), us.get_user_id())
 
-                if chats[chat_numb].get_banned_chanel() != 0:
-                    try:
-                        member = bot.get_chat_member(chats[chat_numb].get_chat_banned(), id_user)
-                        if member and str(member.status) != "left":
-                            pass
-                    except Exception as e:
+        if message.new_chat_members[0].id != message.from_user.id:
+            id_user = message.new_chat_members[0].id
+            #name = f"[{message.new_chat_members[0].first_name}](tg://user?id={str(message.new_chat_members[0].id)})"
+            name = message.new_chat_members[0].first_name
+            for us in users_in_chat:
+                friends = us.get_invited_friends()
+                if us.get_user_id() == message.from_user.id and not (message.new_chat_members[0].id in friends):
+                    us.set_friends_count(us.get_friends_count() + 1)
+                    us.add_invited_friends(message.new_chat_members[0].id)
+        else:
+            id_user = message.from_user.id
+            #name = f"[{message.from_user.first_name}](tg://user?id={str(message.from_user.id)})"
+            name = message.from_user.first_name
+
+        try:
+            chat_numb = get_chat(message.chat.id)
+            if not chats[chat_numb].is_user_in_chat(id_user):
+                chats[chat_numb].add_user_in_chat(id_user)
+
+            if not chats[chat_numb].is_new_user_in_chat(id_user):
+                chats[chat_numb].add_new_user_in_chat(id_user)
+
+            users_in_chat = chats[chat_numb].get_users_in_chat()
+            for us in users_in_chat:
+                if us.get_user_id() == id_user:
+                    if chats[chat_numb].get_banned_time() > 0:
+                        us.set_time_of_ban(chats[chat_numb].get_banned_time())
+                        us.set_when_banned(time.time())
+                        us.set_is_time_banned(True)
                         bot.restrict_chat_member(chats[chat_numb].get_chat_id(), us.get_user_id())
 
-                        us.set_is_group_banned(True)
-        try:
-            bot.delete_message(message.chat.id, chats[chat_numb].get_previous_message())
+                    if chats[chat_numb].get_banned_chanel() != 0:
+                        try:
+                            member = bot.get_chat_member(chats[chat_numb].get_chat_banned(), id_user)
+                            if member and str(member.status) != "left":
+                                pass
+                        except Exception as e:
+                            bot.restrict_chat_member(chats[chat_numb].get_chat_id(), us.get_user_id())
+
+                            us.set_is_group_banned(True)
+            try:
+                bot.delete_message(message.chat.id, chats[chat_numb].get_previous_message())
+            except Exception as e:
+                print(e)
+
+            try:
+                bot.delete_message(message.chat.id, chats[chat_numb].get_previous_data())
+            except Exception:
+                pass
+            text = name + ", "+chats[chat_numb].get_welcome_text()
+            keyboard = types.InlineKeyboardMarkup()
+            if chats[chat_numb].get_buttons_new():
+                keyboard = get_buttons(chats[chat_numb].get_buttons())
+
+            if chats[chat_numb].get_welcome():
+                if chats[chat_numb].get_welcome_photo():
+                    photo = open(str(chats[chat_numb].get_chat_id()), 'rb')
+                    mes1 = bot.send_message(chats[chat_numb].get_chat_id(), text, reply_markup=keyboard,
+                                            parse_mode='HTML')
+                    chats[chat_numb].set_previous_message(mes1.message_id)
+
+                    mes2 = bot.send_photo(chats[chat_numb].get_chat_id(), photo)
+                    chats[chat_numb].set_previous_data(mes2.message_id)
+
+                elif chats[chat_numb].get_welcome_gif():
+                    gif_mes = open(str(chats[chat_numb].get_chat_id()) + ".gif", 'rb')
+                    mes1 = bot.send_message(chats[chat_numb].get_chat_id(), text, reply_markup=keyboard, parse_mode='HTML')
+                    chats[chat_numb].set_previous_message(mes1.message_id)
+
+                    mes2 = bot.send_animation(chats[chat_numb].get_chat_id(), gif_mes)
+                    chats[chat_numb].set_previous_data(mes2.message_id)
+                else:
+                    mes = bot.send_message(message.chat.id, text, reply_markup=keyboard, parse_mode='HTML')
+                    chats[chat_numb].set_previous_message(mes.message_id)
+
+            bot.delete_message(message.chat.id, message.message_id)
         except Exception as e:
             print(e)
-
-        try:
-            bot.delete_message(message.chat.id, chats[chat_numb].get_previous_data())
-        except Exception:
-            pass
-        text = name + ", "+chats[chat_numb].get_welcome_text()
-        keyboard = types.InlineKeyboardMarkup()
-        if chats[chat_numb].get_buttons_new():
-            keyboard = get_buttons(chats[chat_numb].get_buttons())
-
-        if chats[chat_numb].get_welcome():
-            if chats[chat_numb].get_welcome_photo():
-                photo = open(str(chats[chat_numb].get_chat_id()), 'rb')
-                mes1 = bot.send_message(chats[chat_numb].get_chat_id(), text, reply_markup=keyboard,
-                                        parse_mode='HTML')
-                chats[chat_numb].set_previous_message(mes1.message_id)
-
-                mes2 = bot.send_photo(chats[chat_numb].get_chat_id(), photo)
-                chats[chat_numb].set_previous_data(mes2.message_id)
-
-            elif chats[chat_numb].get_welcome_gif():
-                gif_mes = open(str(chats[chat_numb].get_chat_id()) + ".gif", 'rb')
-                mes1 = bot.send_message(chats[chat_numb].get_chat_id(), text, reply_markup=keyboard, parse_mode='HTML')
-                chats[chat_numb].set_previous_message(mes1.message_id)
-
-                mes2 = bot.send_animation(chats[chat_numb].get_chat_id(), gif_mes)
-                chats[chat_numb].set_previous_data(mes2.message_id)
-            else:
-                mes = bot.send_message(message.chat.id, text, reply_markup=keyboard, parse_mode='HTML')
-                chats[chat_numb].set_previous_message(mes.message_id)
-
-        bot.delete_message(message.chat.id, message.message_id)
-    except Exception as e:
-        print(e)
+    except Exception:
+        pass
 
 
 @bot.message_handler(content_types=["left_chat_member"])
@@ -2156,7 +2187,6 @@ def check_banned():
                             if not us.get_is_time_banned() and not us.get_is_group_banned() \
                                     and not us.get_is_friend_banned() and not us.get_is_sleep_banned() and not us.get_is_posts_banned():
                                 bot.promote_chat_member(chat.get_chat_id(), us.get_user_id())
-                                us.set_is_banned(False)
                             else:
                                 req = f'https://api.telegram.org/bot{token}/restrictChatMember'
 
@@ -2459,8 +2489,6 @@ def message_handler(message):
                 admins = []
                 for admin in bot.get_chat_administrators(message.chat.id):
                     admins.append(admin.user.id)
-                    if admin.status == "creator" and not is_chat(message.chat.id):
-                        chats.append(Chat(admin.user.id, message.chat.id))
                 chat_numb = get_chat(message.chat.id)
                 users_in_chat = chats[chat_numb].get_users_in_chat()
                 for us in users_in_chat:
