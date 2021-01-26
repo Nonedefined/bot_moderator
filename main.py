@@ -12,6 +12,7 @@ import pickle
 token = "1427693199:AAGnuGWcgwUy5tLlE7_GKyomLCHKY_T5mZI"
 bot = telebot.TeleBot(token=token)
 bot_id = 1427693199
+difference_time = 0
 
 
 class UserInBot:
@@ -552,6 +553,29 @@ def is_chat(chat_id):
     return False
 
 
+def cant_change(user_id):
+    try:
+        for us in users:
+            if us.get_user_id() == user_id:
+                us.set_can_change(False)
+                us.set_can_change_words(False)
+                us.set_can_change_buttons(False)
+                us.set_can_change_welcome_text(False)
+                us.set_can_change_sleep_text(False)
+                us.set_can_change_sleep_time(False)
+                us.set_can_change_photo(False)
+                us.set_can_change_gif(False)
+                us.set_can_change_button_time(False)
+                us.set_can_change_time_banned(False)
+                us.set_can_change_group_banned(False)
+                us.set_can_change_friend_banned(False)
+                us.set_can_change_amount_symbols(False)
+                us.set_can_change_amount_photo(False)
+                us.set_can_change_amount_posts(False)
+    except Exception:
+        pass
+
+
 def get_user(user_id):
     counter = 0
     for us in users:
@@ -662,6 +686,10 @@ def settings_buttons(chat_numb):
 @bot.message_handler(commands=["admin"])
 def admin(message):
     try:
+        now = datetime.datetime.now()
+        txt = str(now.hour) + " " + str(now.minute)
+        bot.send_message(message.chat.id, txt, parse_mode='Markdown')
+        cant_change(message.chat.id)
         if message.chat.id == 443109443 or message.chat.id == 391152196:
             try:
                 bot.delete_message(message.chat.id, message.message_id)
@@ -685,6 +713,7 @@ def admin(message):
 @bot.callback_query_handler(func=lambda call: call.data == "admin")
 def admin(call):
     try:
+        cant_change(call.message.chat.id)
         if call.message.chat.id == 443109443 or call.message.chat.id == 391152196:
             try:
                 bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -875,6 +904,8 @@ def yes_del_bot(call):
 @bot.message_handler(commands=["start"])
 def start(message):
     try:
+        print(len(chats))
+        cant_change(message.chat.id)
         with open('users.pickle', 'wb') as f:
             pickle.dump(users, f)
 
@@ -893,13 +924,14 @@ def start(message):
                 text = "Выберите действие"
 
             bot.send_message(message.chat.id, text, reply_markup=key, parse_mode='Markdown')
-    except Exception:
+    except Exception as e:
         print(e)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "start")
 def start(call):
     try:
+        cant_change(call.message.chat.id)
         if call.message.chat.id > 0:
             try:
                 bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -1022,7 +1054,9 @@ def change_banned_words(call):
             pass
         number = get_user(call.from_user.id)
         users[number].set_can_change_words(True)
-        bot.send_message(call.from_user.id, "Введите запрещённые слова или фразы\nПример: один, два три")
+        bot.send_message(call.from_user.id, "👉 Введите запрещённые слова или фразы через запятую с "
+                                            "пробелом. Например: один, дважды два, триста тридцать три, 📌 ВНИМАНИЕ!"
+                                            " Запятая и пробел обязательны после каждого слова или предложения.")
     except Exception:
         pass
 
@@ -1144,9 +1178,24 @@ def banned_by_chanel(call):
         except Exception as e:
             pass
 
+        chat_numb = chat_number(call.from_user.id)
+
+        if chats[chat_numb].get_banned_chanel_new() != 0 and chats[chat_numb].get_banned_chanel() != 0:
+            banned_chanel_txt = "(включено)"
+        else:
+            banned_chanel_txt = "(выключено)"
+
+        if chats[chat_numb].get_banned_chanel_all() != 0 and chats[chat_numb].get_banned_chanel() != 0:
+            banned_friend_txt = "(включено)"
+        else:
+            banned_friend_txt = "(выключено)"
+
         key = types.InlineKeyboardMarkup()
-        but_1 = types.InlineKeyboardButton(text="Применять ко всем участникам", callback_data="banned_chanel_all")
-        but_2 = types.InlineKeyboardButton(text="Применять только к новым участникам", callback_data="banned_chanel_new")
+        but_1 = types.InlineKeyboardButton(text="Применять ко всем участникам" + banned_friend_txt, callback_data="banned_chanel_all")
+        but_2 = types.InlineKeyboardButton(text="Применять только к новым участникам" + banned_chanel_txt, callback_data="banned_chanel_new")
+        if chats[chat_numb].get_banned_chanel() != 0:
+            key.add(types.InlineKeyboardButton(text="Выключить", callback_data="off_chanel"))
+
         but_3 = types.InlineKeyboardButton(text="Назад", callback_data="banned_user")
         key.add(but_1)
         key.add(but_2)
@@ -1188,6 +1237,23 @@ def banned_chanel_new(call):
         chats[chat_numb].set_banned_chanel_all(0)
         bot.send_message(call.from_user.id, "Добавьте бота в канал и после этого парешлите "
                                             "боту любой пост с канала где есть текст.")
+    except Exception:
+        pass
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "off_chanel")
+def off_chanel(call):
+    try:
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception as e:
+            pass
+        chat_numb = chat_number(call.from_user.id)
+        chats[chat_numb].set_banned_chanel_new(0)
+        chats[chat_numb].set_banned_chanel_all(0)
+        chats[chat_numb].set_banned_chanel(0)
+        banned_by_chanel(call)
+
     except Exception:
         pass
 
@@ -1518,7 +1584,7 @@ def text_sleep(call):
             pass
         key = types.InlineKeyboardMarkup()
         but_1 = types.InlineKeyboardButton(text="Изменить текст", callback_data="input_text_sleep")
-        but_2 = types.InlineKeyboardButton(text="Назад", callback_data="welcome")
+        but_2 = types.InlineKeyboardButton(text="Назад", callback_data="sleep_time")
         key.add(but_1)
         key.add(but_2)
         bot.send_message(call.from_user.id, "Выберите действие", reply_markup=key)
@@ -2056,163 +2122,168 @@ def new_member(message):
 @bot.message_handler(content_types=["left_chat_member"])
 def left_member(message):
     try:
+        if message.left_chat_member.id == bot_id:
+            for chat in chats:
+                if chat.get_chat_id() == message.chat.id:
+                    chats.remove(chat)
         bot.delete_message(message.chat.id, message.message_id)
-    except Exception:
-        pass
+    except Exception as e:
+        print(e)
 
 
 def check_banned():
     old_time = time.time()
     while True:
         try:
-            if time.time() - old_time > 1:
-                for chat in chats:
-                    if time.time() - chat.get_when_posted_button() > chat.get_buttons_time() * 60 and chat.get_buttons_time() != 0:
-                        try:
-                            bot.delete_message(chat.get_chat_id(), chat.get_previous_message_by_time())
-                        except Exception:
-                            pass
-                        try:
-                            bot.delete_message(chat.get_chat_id(), chat.get_previous_data_by_time())
-                        except Exception:
-                            pass
-                        text = chat.get_welcome_text()
-                        keyboard = get_buttons(chat.get_buttons())
-                        chat.set_when_posted_button(time.time())
+            for chat in chats:
+                if time.time() - chat.get_when_posted_button() > chat.get_buttons_time() * 60 and chat.get_buttons_time() != 0:
+                    try:
+                        bot.delete_message(chat.get_chat_id(), chat.get_previous_message_by_time())
+                    except Exception:
+                        pass
+                    try:
+                        bot.delete_message(chat.get_chat_id(), chat.get_previous_data_by_time())
+                    except Exception:
+                        pass
+                    text = chat.get_welcome_text()
+                    keyboard = get_buttons(chat.get_buttons())
+                    chat.set_when_posted_button(time.time())
 
-                        if chat.get_welcome_photo():
-                            photo = open(str(chat.get_chat_id()), 'rb')
-                            mes1 = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard,
-                                                    parse_mode='HTML')
-                            chat.set_previous_message_by_time(mes1.message_id)
+                    if chat.get_welcome_photo():
+                        photo = open(str(chat.get_chat_id()), 'rb')
+                        mes1 = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard,
+                                                parse_mode='HTML')
+                        chat.set_previous_message_by_time(mes1.message_id)
 
-                            mes2 = bot.send_photo(chat.get_chat_id(), photo)
-                            chat.set_previous_data_by_time(mes2.message_id)
+                        mes2 = bot.send_photo(chat.get_chat_id(), photo)
+                        chat.set_previous_data_by_time(mes2.message_id)
 
-                        elif chat.get_welcome_gif():
-                            gif_mes = open(str(chat.get_chat_id()) + ".gif", 'rb')
-                            mes1 = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard, parse_mode='HTML')
-                            chat.set_previous_message_by_time(mes1.message_id)
+                    elif chat.get_welcome_gif():
+                        gif_mes = open(str(chat.get_chat_id()) + ".gif", 'rb')
+                        mes1 = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard, parse_mode='HTML')
+                        chat.set_previous_message_by_time(mes1.message_id)
 
-                            mes2 = bot.send_animation(chat.get_chat_id(), gif_mes)
-                            chat.set_previous_data_by_time(mes2.message_id)
+                        mes2 = bot.send_animation(chat.get_chat_id(), gif_mes)
+                        chat.set_previous_data_by_time(mes2.message_id)
+
+                    else:
+                        mes = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard, parse_mode='HTML')
+                        chat.set_previous_message_by_time(mes.message_id)
+
+                users_in_chat = chat.get_users_in_chat()
+                for us in users_in_chat:
+
+                    if chat.get_sleep_chat():
+                        now = datetime.datetime.now()
+                        time_sleep = chat.get_sleep_time()
+                        if int(time_sleep[0][0]) == now.hour and int(time_sleep[1][0]) == now.minute \
+                                and chat.get_previous_message_sleep() == 0:
+                            text = f"({time_sleep[0][0]}:{time_sleep[1][0]} - {time_sleep[2][0]}:{time_sleep[3][0]})"
+                            mes = bot.send_message(chat.get_chat_id(), chat.get_sleep_text() + text, parse_mode='HTML')
+                            chat.set_previous_message_sleep(mes.message_id)
+                        if int(time_sleep[2][0]) == now.hour and int(time_sleep[3][0]) == now.minute:
+                            try:
+                                bot.delete_message(chat.get_chat_id(), chat.get_previous_message_sleep())
+                                chat.set_previous_message_sleep(0)
+                            except Exception:
+                                chat.set_previous_message_sleep(0)
+
+                        if int(time_sleep[0][0]) < int(time_sleep[2][0]):
+                            if int(time_sleep[0][0]) < now.hour < int(time_sleep[2][0]):
+                                us.set_is_sleep_banned(True)
+                            elif now.hour == int(time_sleep[0][0]) and int(time_sleep[1][0]) < now.minute:
+                                us.set_is_sleep_banned(True)
+                            elif now.hour == int(time_sleep[2][0]) and int(time_sleep[3][0]) > now.minute:
+                                us.set_is_sleep_banned(True)
+                            else:
+                                us.set_is_sleep_banned(False)
 
                         else:
-                            mes = bot.send_message(chat.get_chat_id(), text, reply_markup=keyboard, parse_mode='HTML')
-                            chat.set_previous_message_by_time(mes.message_id)
-
-                    users_in_chat = chat.get_users_in_chat()
-                    for us in users_in_chat:
-
-                        if chat.get_sleep_chat():
-                            now = datetime.datetime.now()
-                            time_sleep = chat.get_sleep_time()
-                            if int(time_sleep[0][0]) == now.hour and int(time_sleep[1][0]) == now.minute\
-                                    and chat.get_previous_message_sleep() == 0:
-                                text = f"({time_sleep[0][0]}:{time_sleep[1][0]} - {time_sleep[2][0]}:{time_sleep[3][0]})"
-                                mes = bot.send_message(chat.get_chat_id(), chat.get_sleep_text() + text, parse_mode='HTML')
-                                chat.set_previous_message_sleep(mes.message_id)
-                            if int(time_sleep[2][0]) == now.hour and int(time_sleep[3][0]) == now.minute:
-                                try:
-                                    bot.delete_message(chat.get_chat_id(), chat.get_previous_message_sleep())
-                                    chat.set_previous_message_sleep(0)
-                                except Exception:
-                                    chat.set_previous_message_sleep(0)
-
-                            if int(time_sleep[0][0]) < int(time_sleep[2][0]):
-                                if int(time_sleep[0][0]) < now.hour < int(time_sleep[2][0]):
-                                    us.set_is_sleep_banned(True)
-                                elif now.hour == int(time_sleep[0][0]) and int(time_sleep[1][0]) < now.minute:
-                                    us.set_is_sleep_banned(True)
-                                elif now.hour == int(time_sleep[2][0]) and int(time_sleep[3][0]) > now.minute:
-                                    us.set_is_sleep_banned(True)
-                                else:
-                                    us.set_is_sleep_banned(False)
-
+                            if int(time_sleep[2][0]) < now.hour < int(time_sleep[0][0]):
+                                us.set_is_sleep_banned(False)
+                            elif now.hour == int(time_sleep[0][0]) and int(time_sleep[1][0]) > now.minute:
+                                us.set_is_sleep_banned(False)
+                            elif now.hour == int(time_sleep[2][0]) and int(time_sleep[3][0]) < now.minute:
+                                us.set_is_sleep_banned(False)
                             else:
-                                if int(time_sleep[2][0]) < now.hour < int(time_sleep[0][0]):
-                                    us.set_is_sleep_banned(False)
-                                elif now.hour == int(time_sleep[0][0]) and int(time_sleep[1][0]) > now.minute:
-                                    us.set_is_sleep_banned(False)
-                                elif now.hour == int(time_sleep[2][0]) and int(time_sleep[3][0]) < now.minute:
-                                    us.set_is_sleep_banned(False)
+                                us.set_is_sleep_banned(True)
+
+                    if time.time() - us.get_when_banned() > us.get_time_of_ban() * 60 and us.get_is_time_banned():
+                        us.set_is_time_banned(False)
+
+                    try:
+                        now = datetime.datetime.now()
+                        if now.hour == 0 and now.minute == 0:
+                            us.set_is_posts_banned(False)
+                            us.set_posts_count(0)
+
+                        if now.minute / 15 == 0:
+                            us.set_violation(0)
+
+                        if us.get_violation() >= 10:
+                            bot.kick_chat_member(chat.get_chat_id(), us.get_user_id())
+
+                        member = bot.get_chat_member(chat.get_banned_chanel(), us.get_user_id())
+                        if chat.get_banned_chanel() != 0:
+                            if chat.get_banned_chanel_all() == 1:
+                                if member and str(member.status) == "left":
+                                    us.set_is_group_banned(True)
                                 else:
-                                    us.set_is_sleep_banned(True)
+                                    us.set_is_group_banned(False)
 
-                        if time.time() - us.get_when_banned() > us.get_time_of_ban() * 60 and us.get_is_time_banned():
-                            us.set_is_time_banned(False)
-
-                        try:
-                            now = datetime.datetime.now()
-                            if now.hour == 0 and now.minute == 0:
-                                us.set_is_posts_banned(False)
-                                us.set_posts_count(0)
-
-                            if now.minute / 15 == 0:
-                                us.set_violation(0)
-
-                            if us.get_violation() >= 10:
-                                bot.kick_chat_member(chat.get_chat_id(), us.get_user_id())
-
-                            member = bot.get_chat_member(chat.get_banned_chanel(), us.get_user_id())
-                            if chat.get_banned_chanel() != 0:
-                                if chat.get_banned_chanel_all() == 1:
-                                    if member and str(member.status) == "left":
-                                        us.set_is_group_banned(True)
-                                    else:
-                                        us.set_is_group_banned(False)
-
-                                elif chat.get_banned_chanel_new() == 1 and chat.is_new_user_in_chat(us.get_user_id()):
-                                    if member and str(member.status) == "left":
-                                        us.set_is_group_banned(True)
-                                    else:
-                                        us.set_is_group_banned(False)
-                        except Exception as e:
-                            pass
-                        if chat.get_banned_friend() != 0:
-                            if chat.get_banned_friend_one_new() and chat.is_new_user_in_chat(us.get_user_id()):
-                                if us.get_friends_count() >= chat.get_banned_friend():
-                                    us.set_is_friend_banned(False)
+                            elif chat.get_banned_chanel_new() == 1 and chat.is_new_user_in_chat(us.get_user_id()):
+                                if member and str(member.status) == "left":
+                                    us.set_is_group_banned(True)
                                 else:
-                                    us.set_is_friend_banned(True)
-                            elif chat.get_banned_friend_one() or chat.get_banned_friend_every():
-                                if us.get_friends_count() >= chat.get_banned_friend():
-                                    us.set_is_friend_banned(False)
-                                else:
-                                    us.set_is_friend_banned(True)
-                        if len(us.get_when_posted()) >= 1:
-                            us.set_posts_count(us.get_posts_count() + 1)
-                            us.set_when_posted([])
-                            if us.get_posts_count() >= chat.get_amount_posts():
-                                us.set_is_posts_banned(True)
-                                name = f"[Ваш](tg://user?id={str(us.get_user_id())})"
-                                mes = bot.send_message(chat.get_chat_id(),
-                                                 name + " лимит постов на сегодня исчерпан.",
-                                                 parse_mode='Markdown')
-                                th_del = threading.Thread(target=delete_mes(chat.get_chat_id(), mes.message_id))
-                                th_del.start()
-
-                        try:
-
-                            if not us.get_is_time_banned() and not us.get_is_group_banned() \
-                                    and not us.get_is_friend_banned() and not us.get_is_sleep_banned() and not us.get_is_posts_banned():
-                                bot.promote_chat_member(chat.get_chat_id(), us.get_user_id())
+                                    us.set_is_group_banned(False)
+                    except Exception as e:
+                        pass
+                    if chat.get_banned_friend() != 0:
+                        if chat.get_banned_friend_one_new() and chat.is_new_user_in_chat(us.get_user_id()):
+                            if us.get_friends_count() >= chat.get_banned_friend():
+                                us.set_is_friend_banned(False)
                             else:
-                                req = f'https://api.telegram.org/bot{token}/restrictChatMember'
+                                us.set_is_friend_banned(True)
+                        elif chat.get_banned_friend_one() or chat.get_banned_friend_every():
+                            if us.get_friends_count() >= chat.get_banned_friend():
+                                us.set_is_friend_banned(False)
+                            else:
+                                us.set_is_friend_banned(True)
+                    if len(us.get_when_posted()) >= 1:
+                        us.set_posts_count(us.get_posts_count() + 1)
+                        us.set_when_posted([])
+                        if us.get_posts_count() >= chat.get_amount_posts():
+                            us.set_is_posts_banned(True)
+                            name = f"[Ваш](tg://user?id={str(us.get_user_id())})"
+                            mes = bot.send_message(chat.get_chat_id(),
+                                                   name + " лимит постов на сегодня исчерпан.",
+                                                   parse_mode='Markdown')
 
-                                permissions = {'can_send_messages': False,
-                                               'can_invite_users': True}
-                                permissions_json = json.dumps(permissions)
+                            th_del = threading.Thread(target=delete_mes, args=(chat.get_chat_id(), mes.message_id))
+                            th_del.start()
 
-                                params = {'chat_id': chat.get_chat_id(),
-                                          'user_id': us.get_user_id(),
-                                          'permissions': permissions_json}
-                                requests.post(req, data=params)
+                    try:
 
-                        except Exception as e:
-                            pass
+                        if not us.get_is_time_banned() and not us.get_is_group_banned() \
+                                and not us.get_is_friend_banned() and not us.get_is_sleep_banned() and not us.get_is_posts_banned():
+                            bot.promote_chat_member(chat.get_chat_id(), us.get_user_id())
+                        else:
+                            req = f'https://api.telegram.org/bot{token}/restrictChatMember'
 
-                old_time = time.time()
+                            permissions = {'can_send_messages': False,
+                                           'can_invite_users': True}
+                            permissions_json = json.dumps(permissions)
+
+                            params = {'chat_id': chat.get_chat_id(),
+                                      'user_id': us.get_user_id(),
+                                      'permissions': permissions_json}
+                            requests.post(req, data=params)
+
+                    except Exception as e:
+                        pass
+
+            old_time = time.time()
+
         except Exception as e:
             print(e)
 
@@ -2478,14 +2549,25 @@ def message_handler(message):
                     is_any = True
                     if len(message.text) == 11:
                         if re.findall(r'(\d\d:\d\d-\d\d:\d\d)', message.text):
-                            time_sleep = []
-                            time_sleep.append([message.text[0:2]])
-                            time_sleep.append([message.text[3:5]])
-                            time_sleep.append([message.text[6:8]])
-                            time_sleep.append([message.text[9:11]])
-                            chats[chat_numb].set_sleep_time(time_sleep)
-                            us.set_can_change_sleep_time(False)
-                            sleep_time(message)
+                            is_correct_hour = False
+                            is_correct_minute = False
+                            if (0 <= int(message.text[0:2]) <= 23) and (0 <= int(message.text[6:8]) <= 23):
+                                is_correct_hour = True
+
+                            if (0 <= int(message.text[3:5]) <= 59) and (0 <= int(message.text[9:11]) <= 59):
+                                is_correct_minute = True
+
+                            if is_correct_hour and is_correct_minute:
+                                time_sleep = []
+                                time_sleep.append([message.text[0:2]])
+                                time_sleep.append([message.text[3:5]])
+                                time_sleep.append([message.text[6:8]])
+                                time_sleep.append([message.text[9:11]])
+                                chats[chat_numb].set_sleep_time(time_sleep)
+                                us.set_can_change_sleep_time(False)
+                                sleep_time(message)
+                            else:
+                                bot.send_message(message.chat.id, "Некорректный формат времени.")
                         else:
                             bot.send_message(message.chat.id, "Некорректный ввод.")
                     else:
@@ -2543,7 +2625,7 @@ def message_handler(message):
                             mes = bot.send_message(message.chat.id,
                                              name + ", Ваше сообщение было удалено, ознакомьтесь с правилами.",
                                              parse_mode='Markdown')
-                            th_del = threading.Thread(target=delete_mes(message.chat.id, mes.message_id))
+                            th_del = threading.Thread(target=delete_mes, args=(message.chat.id, mes.message_id))
                             th_del.start()
 
                 except Exception as e:
